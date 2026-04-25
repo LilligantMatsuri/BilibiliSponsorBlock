@@ -102,13 +102,35 @@ export function describeSelector(selector: string): Record<string, unknown> {
     };
 }
 
+function normalizeLifecycleValue(value: unknown): unknown {
+    if (value instanceof HTMLVideoElement) {
+        return describeVideo(value);
+    }
+
+    if (value instanceof Element) {
+        return describeElement(value);
+    }
+
+    if (Array.isArray(value)) {
+        return value.map((item) => normalizeLifecycleValue(item));
+    }
+
+    return value;
+}
+
+function normalizeLifecycleDetails(details: Record<string, unknown>): Record<string, unknown> {
+    return Object.fromEntries(
+        Object.entries(details).map(([key, value]) => [key, normalizeLifecycleValue(value)])
+    );
+}
+
 export function logLifecycle(stage: string, details: Record<string, unknown> = {}): void {
     const entry: SponsorBlockLifecycleLogEntry = {
         time: new Date().toISOString(),
         stage,
         hidden: typeof document !== "undefined" ? document.hidden : undefined,
         readyState: typeof document !== "undefined" ? document.readyState : undefined,
-        details,
+        details: normalizeLifecycleDetails(details),
     };
 
     if (typeof window !== "undefined") {
@@ -141,6 +163,14 @@ export function logLifecycle(stage: string, details: Record<string, unknown> = {
     if (typeof window === "undefined" || shouldEmitConsoleLogs()) {
         console.log("[BSB lifecycle]", entry);
     }
+}
+
+export function logUiLifecycle(
+    scope: string,
+    phase: "wait" | "ready" | "attach" | "state" | "detach" | "error",
+    details: Record<string, unknown> = {}
+): void {
+    logLifecycle(`${scope}/${phase}`, details);
 }
 
 export function getLogsSnapshot(): {

@@ -7,8 +7,8 @@ import { VoteResponse } from "../messageTypes";
 import { Category, SegmentUUID, SponsorTime } from "../types";
 import { waitFor } from "../utils/";
 import { addCleanupListener } from "../utils/cleanup";
-import { waitForElement } from "../utils/dom";
-import { describeElement, logLifecycle } from "../utils/logger";
+import { isVisible } from "../utils/dom";
+import { logUiLifecycle } from "../utils/logger";
 
 const id = "categoryPill";
 
@@ -48,22 +48,19 @@ export class CategoryPill {
     ): Promise<void> {
         this.vote = vote;
         this.mutationCount = 0;
-        logLifecycle("categoryPill/attach:start", {
+        logUiLifecycle("categoryPill", "wait", {
+            target: "title",
+            action: "attach",
             hasContainer: Boolean(this.container),
             isSegmentSet: this.isSegmentSet,
-            title: describeElement(getBilibiliTitleNode()),
+            title: getBilibiliTitleNode(),
         });
 
-        const referenceNode = (await waitForElement(".video-info-container h1", true)) as HTMLElement;
-        if (!referenceNode) {
-            logLifecycle("categoryPill/attach:titleMissing", {
-                title: describeElement(getBilibiliTitleNode()),
-            });
-            return;
-        }
-        logLifecycle("categoryPill/attach:titleReady", {
-            title: describeElement(referenceNode),
+        const referenceNode = await waitForVisibleTitleNode();
+        logUiLifecycle("categoryPill", "ready", {
+            target: "title",
             text: referenceNode.textContent?.trim() || null,
+            title: referenceNode,
         });
         this.mutationObserver.disconnect();
         this.mutationObserver.observe(referenceNode, { attributes: true, childList: true });
@@ -75,7 +72,8 @@ export class CategoryPill {
             this.attachToPageInternal();
         } catch (error) {
             if (error !== "TIMEOUT") {
-                logLifecycle("categoryPill/attach:error", {
+                logUiLifecycle("categoryPill", "error", {
+                    action: "attach",
                     error: String(error),
                 });
             }
@@ -83,7 +81,7 @@ export class CategoryPill {
     }
 
     private async attachToPageInternal(): Promise<void> {
-        const referenceNode = (await waitForElement(".video-info-container h1", true)) as HTMLElement;
+        const referenceNode = await waitForVisibleTitleNode();
 
         if (referenceNode && !referenceNode.contains(this.container)) {
             if (!this.container) {
@@ -111,9 +109,10 @@ export class CategoryPill {
 
             referenceNode.prepend(this.container);
             referenceNode.style.display = "flex";
-            logLifecycle("categoryPill/attach:mounted", {
+            logUiLifecycle("categoryPill", "attach", {
+                action: "mount",
                 hasState: Boolean(this.lastState),
-                title: describeElement(referenceNode),
+                title: referenceNode,
                 containerConnected: this.container?.isConnected ?? false,
             });
         }
@@ -136,7 +135,8 @@ export class CategoryPill {
     }
 
     async setSegment(segment: SponsorTime): Promise<void> {
-        logLifecycle("categoryPill/setSegment", {
+        logUiLifecycle("categoryPill", "state", {
+            action: "setSegment",
             UUID: segment?.UUID,
             category: segment?.category,
             actionType: segment?.actionType,
@@ -160,7 +160,8 @@ export class CategoryPill {
         }
 
         if (this.container && !this.container.isConnected) {
-            logLifecycle("categoryPill/setSegment:reattachNeeded", {
+            logUiLifecycle("categoryPill", "detach", {
+                action: "reattachNeeded",
                 UUID: segment?.UUID,
             });
             void this.attachToPageInternal();
@@ -171,4 +172,13 @@ export class CategoryPill {
 
 function getBilibiliTitleNode(): HTMLElement {
     return document.querySelector(".video-info-container h1") as HTMLElement;
+}
+
+async function waitForVisibleTitleNode(): Promise<HTMLElement> {
+    return await waitFor(
+        () => getBilibiliTitleNode(),
+        20000,
+        100,
+        (node) => Boolean(node && isVisible(node, true))
+    );
 }

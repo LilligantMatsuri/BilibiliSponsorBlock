@@ -13,7 +13,7 @@ import {
 import Utils from "../utils";
 import { isFirefox, isFirefoxOrSafari, isSafari, waitFor } from "../utils/";
 import { GenericUtils } from "../utils/genericUtils";
-import { logDebug, logLifecycle } from "../utils/logger";
+import { logDebug, logUiLifecycle } from "../utils/logger";
 import { isPlayingPlaylist } from "../utils/pageUtils";
 import { getBilibiliVideoID } from "../utils/parseVideoID";
 import { getStartTimeFromUrl } from "../utils/urlParser";
@@ -846,21 +846,24 @@ export function startSkipScheduleCheckingForStartSponsors(): void {
 
         const fullVideoSegment = contentState.sponsorTimes.filter((time) => time.actionType === ActionType.Full)[0];
         if (fullVideoSegment) {
-            logLifecycle("categoryPill/fullVideoSegmentDetected", {
+            logUiLifecycle("categoryPill", "state", {
+                action: "fullVideoSegmentDetected",
                 UUID: fullVideoSegment.UUID,
                 category: fullVideoSegment.category,
                 categoryPillPresent: Boolean(getCategoryPill()),
                 videoID: getVideoID(),
             });
             waitFor(() => getCategoryPill()).then(() => {
-                logLifecycle("categoryPill/fullVideoSegmentApply", {
+                logUiLifecycle("categoryPill", "state", {
+                    action: "fullVideoSegmentApply",
                     UUID: fullVideoSegment.UUID,
                     category: fullVideoSegment.category,
                     videoID: getVideoID(),
                 });
                 getCategoryPill()?.setSegment(fullVideoSegment);
             }).catch(() => {
-                logLifecycle("categoryPill/fullVideoSegmentApply:timeout", {
+                logUiLifecycle("categoryPill", "error", {
+                    action: "fullVideoSegmentApplyTimeout",
                     UUID: fullVideoSegment.UUID,
                     category: fullVideoSegment.category,
                     categoryPillPresent: Boolean(getCategoryPill()),

@@ -33,7 +33,7 @@ import { durationEquals } from "../utils/duraionUtils";
 import { getErrorMessage, getFormattedTime } from "../utils/formating";
 import { getHash, getVideoIDHash, HashedValue } from "../utils/hash";
 import { getCidMapFromWindow } from "../utils/injectedScriptMessageUtils";
-import { logLifecycle } from "../utils/logger";
+import { logUiLifecycle } from "../utils/logger";
 import { getHashParams } from "../utils/pageUtils";
 import { generateUserID } from "../utils/setup";
 import { getBvID, getCid, getVideo, getVideoID, waitForVideo } from "../utils/video";
@@ -246,12 +246,15 @@ export function setupSkipButtonControlBar(): void {
             selectSegment: (UUID) => void getContentApp().commands.execute("segments/select", { UUID }),
         });
         patchUIState({ skipButtonControlBar: nextSkipButtonControlBar });
-        logLifecycle("skipButton/create", {
+        logUiLifecycle("skipButton", "attach", {
+            action: "create",
             debugId: nextSkipButtonControlBar.debugId,
         });
     }
 
-    logLifecycle("skipButton/attachRequested", {
+    logUiLifecycle("skipButton", "wait", {
+        target: "controls",
+        action: "attach",
         debugId: getSkipButtonControlBar()?.debugId,
     });
     void waitForPlayerUiReady()
@@ -261,7 +264,8 @@ export function setupSkipButtonControlBar(): void {
 
 export function setupCategoryPill(): void {
     let { categoryPill } = getUIState();
-    logLifecycle("categoryPill/setupRequested", {
+    logUiLifecycle("categoryPill", "state", {
+        action: "setupRequested",
         existing: Boolean(categoryPill),
         fullVideoSegmentPresent: contentState.sponsorTimes?.some((time) => time.actionType === ActionType.Full) ?? false,
         videoID: getVideoID(),
@@ -270,7 +274,8 @@ export function setupCategoryPill(): void {
     if (!categoryPill) {
         categoryPill = new CategoryPill();
         patchUIState({ categoryPill });
-        logLifecycle("categoryPill/create", {
+        logUiLifecycle("categoryPill", "attach", {
+            action: "create",
             videoID: getVideoID(),
         });
     }
@@ -279,7 +284,8 @@ export function setupCategoryPill(): void {
 
     const fullVideoSegment = contentState.sponsorTimes?.find((time) => time.actionType === ActionType.Full);
     if (fullVideoSegment) {
-        logLifecycle("categoryPill/setup:restoreExistingSegment", {
+        logUiLifecycle("categoryPill", "state", {
+            action: "restoreExistingSegment",
             UUID: fullVideoSegment.UUID,
             category: fullVideoSegment.category,
             videoID: getVideoID(),
@@ -456,7 +462,8 @@ export async function updateVisibilityOfPlayerControlsButton(): Promise<void> {
     await waitForPlayerUiReady();
     const playerButtons = await getPlayerButton().createButtons();
     patchUIState({ playerButtons: playerButtons ?? {} });
-    logLifecycle("playerButtons/updateVisibility", {
+    logUiLifecycle("playerButtons", "state", {
+        action: "updateVisibility",
         createdButtons: Object.keys(playerButtons ?? {}),
         videoID: getVideoID(),
     });

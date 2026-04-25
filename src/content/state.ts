@@ -8,7 +8,7 @@ import {
     VideoInfo,
 } from "../types";
 import { sourceId } from "../utils/injectedScriptMessageUtils";
-import { logDebug, logLifecycle } from "../utils/logger";
+import { logDebug, logUiLifecycle } from "../utils/logger";
 import { getContentApp } from "./app";
 import { CONTENT_EVENTS } from "./app/events";
 import { ContentAppState } from "./app/types";
@@ -179,7 +179,8 @@ export function setupPageLoadingListener(): void {
         resolved = true;
         const elapsed = Math.round(performance.now() - t0);
         logDebug(`${TAG} Page ready (${reason}) at +${elapsed}ms`);
-        logLifecycle("pageReady/resolved", {
+        logUiLifecycle("pageReady", "ready", {
+            action: "resolved",
             reason,
             elapsed,
         });
@@ -203,8 +204,13 @@ export function setupPageLoadingListener(): void {
                 ? "MAIN world pageReady timeout"
                 : "vue-mount signal from MAIN world";
 
-            logLifecycle(forwardedStage, mainWorldDetails);
-            logLifecycle("pageReady/messageReceived", {
+            logUiLifecycle("pageReady", "state", {
+                action: "mainWorldSignal",
+                stage: forwardedStage,
+                ...mainWorldDetails,
+            });
+            logUiLifecycle("pageReady", "state", {
+                action: "messageReceived",
                 source: e.data?.source,
                 messageType: e.data?.type,
                 mainWorldStage: forwardedStage,

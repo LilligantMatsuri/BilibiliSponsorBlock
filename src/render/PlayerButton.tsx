@@ -5,7 +5,7 @@ import Config from "../config";
 import { waitForPlayerUiReady } from "../content/playerUi";
 import { AnimationUtils } from "../utils/animationUtils";
 import { waitFor } from "../utils/index";
-import { describeElement, logLifecycle } from "../utils/logger";
+import { logUiLifecycle } from "../utils/logger";
 import { SponsorTime } from "../types";
 
 const containerId = "bsbPlayerButtonContainer";
@@ -54,7 +54,8 @@ export class PlayerButton {
 
     public async createButtons(): Promise<Record<string, { button: HTMLButtonElement; image: HTMLImageElement }>> {
         if (this.playerButtons) {
-            logLifecycle("playerButtons/create:reuse", {
+            logUiLifecycle("playerButtons", "state", {
+                action: "reuse",
                 debugId: this.debugId,
             });
             return this.playerButtons;
@@ -71,14 +72,16 @@ export class PlayerButton {
     }
 
     private async createButtonsInternal(): Promise<Record<string, { button: HTMLButtonElement; image: HTMLImageElement }>> {
-        logLifecycle("playerButtons/create:start", {
+        logUiLifecycle("playerButtons", "wait", {
+            target: "controls",
             debugId: this.debugId,
         });
         const { rightControls } = await waitForPlayerUiReady();
         const controlsContainer = rightControls;
         if (!controlsContainer) {
             console.log("Could not find control button containers");
-            logLifecycle("playerButtons/create:missingControls", {
+            logUiLifecycle("playerButtons", "error", {
+                action: "missingControls",
                 debugId: this.debugId,
             });
             return null;
@@ -111,9 +114,10 @@ export class PlayerButton {
                 />
             );
             controlsContainer.prepend(this.container);
-            logLifecycle("playerButtons/create:mounted", {
+            logUiLifecycle("playerButtons", "attach", {
+                action: "mount",
                 debugId: this.debugId,
-                controlsContainer: describeElement(controlsContainer),
+                controlsContainer,
             });
 
             // wait a tick for React to render the buttons
@@ -132,9 +136,10 @@ export class PlayerButton {
                 AnimationUtils.setupAutoHideAnimation(this.playerButtons.info.button, this.container);
             }
             this.creatingButtons = false;
-            logLifecycle("playerButtons/create:ready", {
+            logUiLifecycle("playerButtons", "ready", {
+                target: "buttons",
                 debugId: this.debugId,
-                container: describeElement(this.container),
+                container: this.container,
             });
         }
         return this.playerButtons;

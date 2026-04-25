@@ -1,5 +1,5 @@
 import { sleep, waitFor } from "../utils/";
-import { describeElement, describeVideo, logLifecycle } from "../utils/logger";
+import { describeElement, describeVideo, logUiLifecycle } from "../utils/logger";
 import { getControls, getLeftControls, getProgressBar, isVisible } from "../utils/pageUtils";
 import { getVideo } from "../utils/video";
 import { getPageLoaded } from "./state";
@@ -80,7 +80,10 @@ export async function waitForPlayerUiReady(timeout = 24 * 60 * 60 * 1000): Promi
         return pendingPlayerUiReadyPromise;
     }
 
-    logLifecycle("playerUI/wait:start", summarizePlayerUiSnapshot(capturePlayerUiReadySnapshot()));
+    logUiLifecycle("playerUI", "wait", {
+        target: "ready",
+        ...summarizePlayerUiSnapshot(capturePlayerUiReadySnapshot()),
+    });
 
     pendingPlayerUiReadyPromise = waitFor(capturePlayerUiReadySnapshot, timeout, 100, isPlayerUiReady)
         .then(async () => {
@@ -93,7 +96,10 @@ export async function waitForPlayerUiReady(timeout = 24 * 60 * 60 * 1000): Promi
             return waitFor(capturePlayerUiReadySnapshot, timeout, 100, isPlayerUiReady);
         })
         .then((snapshot) => {
-            logLifecycle("playerUI/wait:resolved", summarizePlayerUiSnapshot(snapshot));
+            logUiLifecycle("playerUI", "ready", {
+                target: "ready",
+                ...summarizePlayerUiSnapshot(snapshot),
+            });
             return snapshot;
         })
         .finally(() => {

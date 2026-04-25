@@ -6,7 +6,7 @@ import { SegmentUUID, SponsorTime } from "../types";
 import { AnimationUtils } from "../utils/animationUtils";
 import { getSkippingText } from "../utils/categoryUtils";
 import { waitFor } from "../utils/index";
-import { describeElement, logLifecycle } from "../utils/logger";
+import { logUiLifecycle } from "../utils/logger";
 
 export interface SkipButtonControlBarProps {
     skip: (segment: SponsorTime) => void;
@@ -78,7 +78,8 @@ export class SkipButtonControlBar {
     }
 
     async attachToPage(): Promise<void> {
-        logLifecycle("skipButton/attach:start", {
+        logUiLifecycle("skipButton", "wait", {
+            action: "attach",
             debugId: this.debugId,
         });
         await waitFor(getPageLoaded, 10000, 10);
@@ -89,9 +90,10 @@ export class SkipButtonControlBar {
         if (mountingContainer && !mountingContainer.contains(this.container)) {
             mountingContainer.append(this.container);
             AnimationUtils.setupAutoHideAnimation(this.skipButton, mountingContainer, false, false);
-            logLifecycle("skipButton/attach:mounted", {
+            logUiLifecycle("skipButton", "attach", {
+                action: "mount",
                 debugId: this.debugId,
-                mountingContainer: describeElement(mountingContainer),
+                mountingContainer,
             });
         }
     }

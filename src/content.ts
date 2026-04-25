@@ -39,7 +39,7 @@ import {
 import { waitFor } from "./utils/";
 import { cleanPage } from "./utils/cleanup";
 import { GenericUtils } from "./utils/genericUtils";
-import { describeElement, describeSelector, describeVideo, logDebug, logLifecycle } from "./utils/logger";
+import { logDebug, logUiLifecycle } from "./utils/logger";
 import { getControls, getProgressBar } from "./utils/pageUtils";
 import {
     detectPageType,
@@ -66,11 +66,12 @@ if (getPageType() === PageType.Unsupported || getPageType() === PageType.Live) {
 
 function init(): void {
     cleanPage();
-    logLifecycle("content/init", {
+    logUiLifecycle("content", "state", {
+        action: "init",
         pageType: getPageType(),
         pageLoaded: getPageLoaded(),
-        controls: describeSelector(".bpx-player-control-bottom-right"),
-        progress: describeSelector(".bpx-player-progress-schedule"),
+        controls: document.querySelector(".bpx-player-control-bottom-right"),
+        progress: document.querySelector(".bpx-player-progress-schedule"),
     });
 
     if (!lifecycleRegistered) {
@@ -130,14 +131,16 @@ function init(): void {
         [PageType.Video, PageType.Festival].includes(getPageType())
     ) {
         document.addEventListener("visibilitychange", () => {
-            logLifecycle("content/visibilitychange.once", {
-                video: describeVideo(getVideo()),
+            logUiLifecycle("content", "state", {
+                action: "visibilitychange",
+                video: getVideo(),
             });
             videoElementChange(true, getVideo());
         }, { once: true });
         window.addEventListener("mouseover", () => {
-            logLifecycle("content/mouseover.once", {
-                video: describeVideo(getVideo()),
+            logUiLifecycle("content", "state", {
+                action: "mouseover",
+                video: getVideo(),
             });
             videoElementChange(true, getVideo());
         }, { once: true });
@@ -205,17 +208,20 @@ function resetValues() {
 }
 
 async function videoIDChange(): Promise<void> {
-    logLifecycle("content/videoIDChange:start", {
+    logUiLifecycle("content", "wait", {
+        action: "videoIDChange",
         videoID: getVideoID(),
         previewBarPresent: getPreviewBar() !== null,
-        controls: describeSelector(".bpx-player-control-bottom-right"),
-        progress: describeSelector(".bpx-player-progress-schedule"),
+        controls: document.querySelector(".bpx-player-control-bottom-right"),
+        progress: document.querySelector(".bpx-player-progress-schedule"),
     });
 
     if (getPreviewBar() === null) {
         waitFor(getControls).then((controls) => {
-            logLifecycle("content/videoIDChange:controlsReady", {
-                controls: describeElement(controls),
+            logUiLifecycle("content", "ready", {
+                target: "controls",
+                action: "videoIDChange",
+                controls,
             });
             void app.commands.execute("ui/createPreviewBar", undefined);
         });
@@ -235,20 +241,25 @@ async function videoIDChange(): Promise<void> {
 
     const loadingPanel = await waitFor(() => document.querySelector(".bpx-player-loading-panel.bpx-state-loading"), 5000, 5)
         .catch(() => null);
-    logLifecycle("content/videoIDChange:loadingPanelWaitFinished", {
+    logUiLifecycle("content", "ready", {
+        target: "loadingPanel",
+        action: "videoIDChange",
         found: Boolean(loadingPanel),
-        loadingPanel: describeElement(loadingPanel),
+        loadingPanel,
     });
 
     const progressBar = await waitFor(getProgressBar, 24 * 60 * 60, 500);
-    logLifecycle("content/videoIDChange:progressReady", {
-        progressBar: describeElement(progressBar),
+    logUiLifecycle("content", "ready", {
+        target: "progress",
+        action: "videoIDChange",
+        progressBar,
     });
 
     void app.commands.execute("ui/updatePlayerButtons", undefined);
     void app.commands.execute("ui/checkPreviewBarState", undefined);
     void app.commands.execute("ui/setupDescriptionPill", undefined);
-    logLifecycle("content/videoIDChange:uiCommandsDispatched", {
+    logUiLifecycle("content", "state", {
+        action: "uiCommandsDispatched",
         videoID: getVideoID(),
     });
 
@@ -283,11 +294,12 @@ async function channelIDChange(channelIDInfo: ChannelIDInfo) {
 }
 
 function videoElementChange(newVideo: boolean, video: HTMLVideoElement | null): void {
-    logLifecycle("content/videoElementChange:received", {
+    logUiLifecycle("content", "state", {
+        action: "videoElementChange",
         newVideo,
-        video: describeVideo(video),
-        controls: describeSelector(".bpx-player-control-bottom-left"),
-        progress: describeSelector(".bpx-player-progress-schedule"),
+        video,
+        controls: document.querySelector(".bpx-player-control-bottom-left"),
+        progress: document.querySelector(".bpx-player-progress-schedule"),
     });
     if (!video) {
         return;
@@ -299,9 +311,11 @@ function videoElementChange(newVideo: boolean, video: HTMLVideoElement | null): 
         }
 
         void waitForPlayerUiReady().then(() => {
-            logLifecycle("content/videoElementChange:readyForUi", {
+            logUiLifecycle("content", "ready", {
+                target: "playerUI",
+                action: "videoElementChange",
                 newVideo,
-                video: describeVideo(video),
+                video,
             });
 
             if (newVideo) {
