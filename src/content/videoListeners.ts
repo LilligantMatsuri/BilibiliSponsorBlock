@@ -1,32 +1,14 @@
 import Config from "../config";
 import { addCleanupListener } from "../utils/cleanup";
-import { logDebug } from "../utils/logger";
 import { getVideoID } from "../utils/video";
 import { getContentApp } from "./app";
 import { CONTENT_EVENTS } from "./app/events";
 import { danmakuForSkip } from "./danmakuSkip";
 import { contentState } from "./state";
 
-let lastCheckTime = 0;
-let lastCheckVideoTime = -1;
-
-export function resetVideoListenerState(): void {
-    lastCheckTime = 0;
-    lastCheckVideoTime = -1;
-}
-
 let playbackRateCheckInterval: NodeJS.Timeout | null = null;
 let lastPlaybackSpeed = 1;
 let setupVideoListenersFirstTime = true;
-
-function getLastKnownVideoTime() {
-    return getContentApp().commands.execute("skip/getLastKnownVideoTime", undefined) as {
-        videoTime: number | null;
-        preciseTime: number | null;
-        fromPause: boolean;
-        approximateDelay: number | null;
-    };
-}
 
 /**
  * Triggered every time the video duration changes.
@@ -70,14 +52,8 @@ export function setupVideoListeners(video: HTMLVideoElement): void {
 
         contentState.switchingVideos = false;
 
-        let startedWaiting = false;
-        let lastPausedAtZero = true;
-
         const rateChangeListener = () => {
-            void app.commands.execute("skip/updateVirtualTime", undefined);
-            void app.commands.execute("skip/clearWaitingTime", undefined);
             app.bus.emit(CONTENT_EVENTS.PLAYER_RATE_CHANGED, { video, playbackRate: video.playbackRate }, { source: "videoListeners.rateChange" });
-            void app.commands.execute("skip/startSchedule", {});
         };
         video.addEventListener("ratechange", rateChangeListener);
         video.addEventListener("videoSpeed_ratechange", rateChangeListener);
@@ -85,64 +61,12 @@ export function setupVideoListeners(video: HTMLVideoElement): void {
         const playListener = () => {
             if (video.readyState <= HTMLMediaElement.HAVE_CURRENT_DATA && video.currentTime === 0) return;
 
-            void app.commands.execute("skip/updateVirtualTime", undefined);
             app.bus.emit(CONTENT_EVENTS.PLAYER_PLAY, { video }, { source: "videoListeners.play" });
-
-            if (contentState.switchingVideos || lastPausedAtZero) {
-                contentState.switchingVideos = false;
-                logDebug("Setting switching videos to false");
-
-                if (contentState.sponsorTimes) {
-                    void app.commands.execute("skip/checkStartSponsors", undefined);
-                }
-            }
-
-            lastPausedAtZero = false;
-
-            if (
-                Math.abs(lastCheckVideoTime - video.currentTime) > 0.3 ||
-                (lastCheckVideoTime !== video.currentTime && Date.now() - lastCheckTime > 2000)
-            ) {
-                lastCheckTime = Date.now();
-                lastCheckVideoTime = video.currentTime;
-
-                void app.commands.execute("skip/startSchedule", {});
-            }
         };
         video.addEventListener("play", playListener);
 
         const playingListener = () => {
-            void app.commands.execute("skip/updateVirtualTime", undefined);
             app.bus.emit(CONTENT_EVENTS.PLAYER_PLAYING, { video }, { source: "videoListeners.playing" });
-            lastPausedAtZero = false;
-
-            if (startedWaiting) {
-                startedWaiting = false;
-                logDebug(
-                    `[SB] Playing event after buffering: ${Math.abs(lastCheckVideoTime - video.currentTime) > 0.3 ||
-                    (lastCheckVideoTime !== video.currentTime && Date.now() - lastCheckTime > 2000)
-                    }`
-                );
-            }
-
-            if (contentState.switchingVideos) {
-                contentState.switchingVideos = false;
-                logDebug("Setting switching videos to false");
-
-                if (contentState.sponsorTimes) {
-                    void app.commands.execute("skip/checkStartSponsors", undefined);
-                }
-            }
-
-            if (
-                Math.abs(lastCheckVideoTime - video.currentTime) > 0.3 ||
-                (lastCheckVideoTime !== video.currentTime && Date.now() - lastCheckTime > 2000)
-            ) {
-                lastCheckTime = Date.now();
-                lastCheckVideoTime = video.currentTime;
-
-                void app.commands.execute("skip/startSchedule", {});
-            }
 
             if (playbackRateCheckInterval) clearInterval(playbackRateCheckInterval);
             lastPlaybackSpeed = video.playbackRate;
@@ -165,59 +89,20 @@ export function setupVideoListeners(video: HTMLVideoElement): void {
         video.addEventListener("playing", playingListener);
 
         const seekingListener = () => {
-            getLastKnownVideoTime().fromPause = false;
             app.bus.emit(CONTENT_EVENTS.PLAYER_SEEKING, { video }, { source: "videoListeners.seeking" });
-
-            if (!video.paused) {
-                lastCheckTime = Date.now();
-                lastCheckVideoTime = video.currentTime;
-
-                void app.commands.execute("skip/updateVirtualTime", undefined);
-                void app.commands.execute("skip/clearWaitingTime", undefined);
-
-                if (video.loop && video.currentTime < 0.2) {
-                    void app.commands.execute("skip/startSchedule", {
-                        includeIntersectingSegments: false,
-                        currentTime: 0,
-                    });
-                } else {
-                    void app.commands.execute("skip/startSchedule", {
-                        includeIntersectingSegments: Config.config.skipOnSeekToSegment,
-                    });
-                }
-            } else {
-                void app.commands.execute("ui/updateActiveSegment", { currentTime: video.currentTime });
-
-                if (video.currentTime === 0) {
-                    lastPausedAtZero = true;
-                }
-            }
         };
         video.addEventListener("seeking", seekingListener);
 
         const stoppedPlayback = () => {
-            lastCheckVideoTime = -1;
-            lastCheckTime = 0;
-
             if (playbackRateCheckInterval) clearInterval(playbackRateCheckInterval);
-
-            const lastKnownVideoTime = getLastKnownVideoTime();
-            lastKnownVideoTime.videoTime = null;
-            lastKnownVideoTime.preciseTime = null;
-            void app.commands.execute("skip/updateWaitingTime", undefined);
-
-            void app.commands.execute("skip/cancelSchedule", undefined);
         };
         const pauseListener = () => {
-            getLastKnownVideoTime().fromPause = true;
             app.bus.emit(CONTENT_EVENTS.PLAYER_PAUSE, { video }, { source: "videoListeners.pause" });
 
             stoppedPlayback();
         };
         video.addEventListener("pause", pauseListener);
         const waitingListener = () => {
-            logDebug("[SB] Not skipping due to buffering");
-            startedWaiting = true;
             app.bus.emit(CONTENT_EVENTS.PLAYER_WAITING, { video }, { source: "videoListeners.waiting" });
 
             stoppedPlayback();

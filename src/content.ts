@@ -27,7 +27,7 @@ import {
 } from "./content/skipScheduler";
 import { setupMessageListener } from "./content/messageHandler";
 import { addHotkeyListener } from "./content/hotkeyHandler";
-import { resetVideoListenerState, setupVideoListeners } from "./content/videoListeners";
+import { setupVideoListeners } from "./content/videoListeners";
 import { DynamicListener, CommentListener } from "./render/DynamicAndCommentSponsorBlock";
 import { setMessageNotice } from "./render/MessageNotice";
 import { checkPageForNewThumbnails, setupThumbnailListener } from "./thumbnail-utils/thumbnailManagement";
@@ -157,7 +157,6 @@ function init(): void {
 }
 
 function resetValues() {
-    resetVideoListenerState();
     resetSchedulerState();
     resetSubmissionState();
 

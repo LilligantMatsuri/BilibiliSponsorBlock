@@ -41,6 +41,10 @@ let currentSkipInterval: NodeJS.Timeout = null;
 let currentVirtualTimeInterval: NodeJS.Timeout = null;
 let currentAdvanceSkipSchedule: NodeJS.Timeout = null;
 let lastTimeFromWaitingEvent: number = null;
+let lastCheckTime = 0;
+let lastCheckVideoTime = -1;
+let startedWaiting = false;
+let lastPausedAtZero = true;
 let videoMuted = false;
 const lastKnownVideoTime: { videoTime: number; preciseTime: number; fromPause: boolean; approximateDelay: number } = {
     videoTime: null,
@@ -72,6 +76,10 @@ export function resetSchedulerState(): void {
         currentAdvanceSkipSchedule = null;
     }
     lastTimeFromWaitingEvent = null;
+    lastCheckTime = 0;
+    lastCheckVideoTime = -1;
+    startedWaiting = false;
+    lastPausedAtZero = true;
     videoMuted = false;
     lastKnownVideoTime.videoTime = null;
     lastKnownVideoTime.preciseTime = null;
@@ -174,6 +182,108 @@ export function registerSkipScheduler(): void {
 
         void startSponsorSchedule();
     });
+    app.bus.on(CONTENT_EVENTS.PLAYER_RATE_CHANGED, () => {
+        updateVirtualTime();
+        clearWaitingTime();
+        void startSponsorSchedule();
+    });
+    app.bus.on(CONTENT_EVENTS.PLAYER_PLAY, ({ video }) => {
+        updateVirtualTime();
+
+        if (contentState.switchingVideos || lastPausedAtZero) {
+            setSwitchingVideosFinished();
+            if (contentState.sponsorTimes) {
+                startSkipScheduleCheckingForStartSponsors();
+            }
+        }
+
+        lastPausedAtZero = false;
+        scheduleIfPlaybackMoved(video);
+    });
+    app.bus.on(CONTENT_EVENTS.PLAYER_PLAYING, ({ video }) => {
+        updateVirtualTime();
+        lastPausedAtZero = false;
+
+        if (startedWaiting) {
+            startedWaiting = false;
+            logDebug(`[SB] Playing event after buffering: ${shouldRefreshPlaybackSchedule(video)}`);
+        }
+
+        if (contentState.switchingVideos) {
+            setSwitchingVideosFinished();
+            if (contentState.sponsorTimes) {
+                startSkipScheduleCheckingForStartSponsors();
+            }
+        }
+
+        scheduleIfPlaybackMoved(video);
+    });
+    app.bus.on(CONTENT_EVENTS.PLAYER_SEEKING, ({ video }) => {
+        lastKnownVideoTime.fromPause = false;
+
+        if (!video.paused) {
+            lastCheckTime = Date.now();
+            lastCheckVideoTime = video.currentTime;
+
+            updateVirtualTime();
+            clearWaitingTime();
+
+            if (video.loop && video.currentTime < 0.2) {
+                void startSponsorSchedule(false, 0);
+            } else {
+                void startSponsorSchedule(Config.config.skipOnSeekToSegment);
+            }
+        } else {
+            void getContentApp().commands.execute("ui/updateActiveSegment", { currentTime: video.currentTime });
+
+            if (video.currentTime === 0) {
+                lastPausedAtZero = true;
+            }
+        }
+    });
+    app.bus.on(CONTENT_EVENTS.PLAYER_PAUSE, ({ video }) => {
+        lastKnownVideoTime.fromPause = true;
+        stopPlaybackScheduling(video);
+    });
+    app.bus.on(CONTENT_EVENTS.PLAYER_WAITING, ({ video }) => {
+        logDebug("[SB] Not skipping due to buffering");
+        startedWaiting = true;
+        stopPlaybackScheduling(video);
+    });
+}
+
+function setSwitchingVideosFinished(): void {
+    contentState.switchingVideos = false;
+    logDebug("Setting switching videos to false");
+}
+
+function shouldRefreshPlaybackSchedule(video: HTMLVideoElement): boolean {
+    return (
+        Math.abs(lastCheckVideoTime - video.currentTime) > 0.3 ||
+        (lastCheckVideoTime !== video.currentTime && Date.now() - lastCheckTime > 2000)
+    );
+}
+
+function scheduleIfPlaybackMoved(video: HTMLVideoElement): void {
+    if (!shouldRefreshPlaybackSchedule(video)) {
+        return;
+    }
+
+    lastCheckTime = Date.now();
+    lastCheckVideoTime = video.currentTime;
+
+    void startSponsorSchedule();
+}
+
+function stopPlaybackScheduling(video: HTMLVideoElement): void {
+    lastCheckVideoTime = -1;
+    lastCheckTime = 0;
+
+    lastKnownVideoTime.videoTime = null;
+    lastKnownVideoTime.preciseTime = null;
+    updateWaitingTime(video);
+
+    cancelSponsorSchedule();
 }
 
 export function cancelSponsorSchedule(): void {
@@ -495,8 +605,8 @@ export function updateVirtualTime(): void {
     }
 }
 
-export function updateWaitingTime(): void {
-    lastTimeFromWaitingEvent = getVideo().currentTime;
+export function updateWaitingTime(video = getVideo()): void {
+    lastTimeFromWaitingEvent = video.currentTime;
 }
 
 export function clearWaitingTime(): void {
