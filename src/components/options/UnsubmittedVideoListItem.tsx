@@ -1,7 +1,9 @@
 import * as React from "react";
 
 import Config from "../../config";
-import { exportTimes, exportTimesAsHashParam } from "../../utils/exporter";
+import { removePageCidMap } from "../../content/segmentSubmission";
+import { NewVideoID } from "../../types";
+import { buildVideoUrl, exportTimes, exportTimesAsHashParam } from "../../utils/exporter";
 import { showMessage } from "../../render/MessageNotice";
 
 export interface UnsubmittedVideosListItemProps {
@@ -27,7 +29,7 @@ class UnsubmittedVideoListItem extends React.Component<UnsubmittedVideosListItem
                 <tr id={this.props.videoID + "UnsubmittedSegmentsRow"} className="categoryTableElement">
                     <td id={this.props.videoID + "UnsubmittedVideoID"} className="categoryTableLabel">
                         <a
-                            href={`https://www.bilibili.com/video/${this.props.videoID}`}
+                            href={buildVideoUrl(this.props.videoID as NewVideoID)}
                             target="_blank"
                             rel="noreferrer"
                         >
@@ -69,6 +71,7 @@ class UnsubmittedVideoListItem extends React.Component<UnsubmittedVideosListItem
         if (confirm(chrome.i18n.getMessage("clearThis"))) {
             delete Config.local.unsubmittedSegments[this.props.videoID];
             Config.forceLocalUpdate("unsubmittedSegments");
+            removePageCidMap(this.props.videoID as NewVideoID);
         }
     }
 
@@ -78,7 +81,7 @@ class UnsubmittedVideoListItem extends React.Component<UnsubmittedVideosListItem
 
     exportSegmentsAsURL(): void {
         this.copyToClipboard(
-            `https://youtube.com/watch?v=${this.props.videoID}${exportTimesAsHashParam(
+            `${buildVideoUrl(this.props.videoID as NewVideoID)}${exportTimesAsHashParam(
                 Config.local.unsubmittedSegments[this.props.videoID]
             )}`
         );

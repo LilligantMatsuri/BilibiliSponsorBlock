@@ -7,6 +7,7 @@ import {
     PreviewBarOption,
     SponsorTime,
     BVID,
+    CID,
     SponsorHideType,
     DynamicSponsorSelection,
     DynamicSponsorOption,
@@ -183,6 +184,9 @@ interface SBStorage {
 
     /* Contains unsubmitted segments that the user has created. */
     unsubmittedSegments: Record<string, SponsorTime[]>;
+
+    // 未提交片段对应稿件的 CID 映射集合，用于跨上下文共享
+    videoPageCidMap: Record<BVID, Record<string, CID>>;
 }
 
 class ConfigClass extends ProtoConfig<SBConfig, SBStorage> {
@@ -584,8 +588,8 @@ const localDefaults = {
     downvotedSegments: {},
     navigationApiAvailable: null,
     alreadyInstalled: false,
-
     unsubmittedSegments: {},
+    videoPageCidMap: {},
 };
 
 const Config = new ConfigClass(syncDefaults, localDefaults, migrateOldSyncFormats);

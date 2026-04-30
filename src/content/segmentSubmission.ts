@@ -149,6 +149,36 @@ function sendInfoUpdatedMessage(portVideo = contentState.portVideo): void {
     });
 }
 
+async function storePageCidMap(bvid: BVID): Promise<void> {
+    const mapData = Config.local!.videoPageCidMap ?? {};
+    // 获取当前稿件的 CID 映射并在扩展程序存储（本地）中持久化
+    const cidMap = await getCidMapFromWindow(bvid);
+    if (cidMap && cidMap.size > 0) {
+        mapData[bvid] = Object.fromEntries(cidMap);
+        Config.local!.videoPageCidMap = mapData;
+        Config.forceLocalUpdate("videoPageCidMap");
+    }
+}
+
+export function removePageCidMap(videoID: NewVideoID): void {
+    const bvid = parseBvidAndCidFromVideoId(videoID).bvId;
+
+    // 判断当前稿件中任意分P是否还有未提交片段，若有则暂不清除映射
+    const segmentData = Config.local!.unsubmittedSegments ?? {};
+    const bvidHasSegments = Object.keys(segmentData).some(segmentVideoID => {
+        const segmentBvid = parseBvidAndCidFromVideoId(segmentVideoID as NewVideoID).bvId;
+        return segmentBvid === bvid;
+    });
+    if (bvidHasSegments) return;
+
+    const mapData = Config.local!.videoPageCidMap ?? {};
+    if (mapData[bvid]) {
+        delete mapData[bvid];
+        Config.local!.videoPageCidMap = mapData;
+        Config.forceLocalUpdate("videoPageCidMap");
+    }
+}
+
 export function getSkipButtonControlBar() { return getUIState().skipButtonControlBar; }
 export function getCategoryPill() { return getUIState().categoryPill; }
 export function getPopupInitialised() { return getUIState().popupInitialised; }
@@ -503,6 +533,7 @@ export function startOrEndTimingNewSegment(): void {
             actionType: ActionType.Skip,
             source: SponsorSourceType.Local,
         });
+        storePageCidMap(getBvID()!);
     } else {
         const existingSegment = getIncompleteSegment();
         const existingTime = existingSegment.segment[0];
@@ -550,6 +581,7 @@ export function cancelCreatingSegment(): void {
             delete Config.local.unsubmittedSegments[getVideoID()];
         }
         Config.forceLocalUpdate("unsubmittedSegments");
+        removePageCidMap(getVideoID()!);
     }
 
     updateSponsorTimesSubmitting(false);
@@ -640,6 +672,7 @@ export function clearSponsorTimes(): void {
 
         delete Config.local.unsubmittedSegments[currentVideoID];
         Config.forceLocalUpdate("unsubmittedSegments");
+        removePageCidMap(getVideoID()!);
 
         contentState.sponsorTimesSubmitting = [];
         emitSubmittingChanged(false, "segmentSubmission.clearSponsorTimes");
@@ -899,6 +932,7 @@ export async function sendSubmitMessage(): Promise<boolean> {
 
         delete Config.local.unsubmittedSegments[getVideoID()];
         Config.forceLocalUpdate("unsubmittedSegments");
+        removePageCidMap(getVideoID()!);
 
         const newSegments = contentState.sponsorTimesSubmitting;
         try {
@@ -1001,5 +1035,6 @@ export function checkForPreloadedSegment(): void {
     if (pushed) {
         Config.local.unsubmittedSegments[getVideoID()] = contentState.sponsorTimesSubmitting;
         Config.forceLocalUpdate("unsubmittedSegments");
+        storePageCidMap(getBvID()!);
     }
 }
