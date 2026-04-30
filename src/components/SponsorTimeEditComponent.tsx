@@ -4,6 +4,7 @@ import * as React from "react";
 import * as CompileConfig from "../../config.json";
 import Config from "../config";
 import { keybindToString } from "../config/config";
+import { removePageCidMap } from "../content/segmentSubmission";
 import { ContentContainer } from "../ContentContainerTypes";
 import { showMessage } from "../render/MessageNotice";
 import { RectangleTooltip } from "../render/RectangleTooltip";
@@ -756,6 +757,7 @@ class SponsorTimeEditComponent extends React.Component<SponsorTimeEditProps, Spo
         //if they are all removed
         if (sponsorTimes.length == 0) {
             this.props.submissionNotice.cancel();
+            removePageCidMap(this.props.contentContainer().sponsorVideoID);
         } else {
             //update display
             this.props.submissionNotice.forceUpdate();

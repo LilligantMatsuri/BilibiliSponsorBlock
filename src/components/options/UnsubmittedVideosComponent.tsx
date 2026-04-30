@@ -63,7 +63,10 @@ class UnsubmittedVideosComponent extends React.Component<UnsubmittedVideosProps,
     }
 
     clearAllSegments(): void {
-        if (confirm(chrome.i18n.getMessage("clearUnsubmittedSegmentsConfirm"))) Config.local.unsubmittedSegments = {};
+        if (confirm(chrome.i18n.getMessage("clearUnsubmittedSegmentsConfirm"))) {
+            Config.local.unsubmittedSegments = {};
+            Config.local!.videoPageCidMap = {};
+        }
     }
 }
 

@@ -1,8 +1,18 @@
 import * as CompileConfig from "../../config.json";
-import { ActionType, Category, CID, SegmentUUID, SponsorSourceType, SponsorTime } from "../types";
+import Config from "../config";
+import {
+    ActionType,
+    Category,
+    CID,
+    NewVideoID,
+    SegmentUUID,
+    SponsorSourceType,
+    SponsorTime
+} from "../types";
 import { generateUserID } from "../utils/setup";
 import { shortCategoryName } from "./categoryUtils";
 import { getFormattedTime, getFormattedTimeToSeconds } from "./formating";
+import { parseBvidAndCidFromVideoId } from "./videoIdUtils";
 
 const inTest = typeof chrome === "undefined";
 
@@ -113,4 +123,21 @@ export function normalizeChapterName(description: string): string {
         .toLowerCase()
         .replace(/[.:'’`‛‘"‟”-]/gu, "")
         .replace(/\s+/g, " ");
+}
+
+export function buildVideoUrl(videoID: NewVideoID): string {
+    const { bvId, cid } = parseBvidAndCidFromVideoId(videoID);
+    const videoUrl = `https://www.bilibili.com/video/${bvId}/`;
+    const cidMap = Config.local!.videoPageCidMap?.[bvId];
+
+    if (!cid || !cidMap) return videoUrl;
+
+    // 仅当稿件存在分P且未提交片段不属于 P1 时，才会添加 URL 参数
+    for (const [mappedPage, mappedCid] of Object.entries(cidMap)) {
+        if (String(mappedCid) === cid) {
+            const page = Number(mappedPage);
+            return page > 1 ? `${videoUrl}?p=${page}` : videoUrl;
+        }
+    }
+    return videoUrl;
 }
