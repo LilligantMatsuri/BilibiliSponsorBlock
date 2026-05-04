@@ -1,9 +1,8 @@
 import * as React from "react";
 
 import Config from "../../config";
-import { removePageCidMap } from "../../content/segmentSubmission";
 import { NewVideoID } from "../../types";
-import { buildVideoUrl, exportTimes, exportTimesAsHashParam } from "../../utils/exporter";
+import { buildVideoUrl, exportTimes, exportTimesAsHashParam, removePageCidMap } from "../../utils/exporter";
 import { showMessage } from "../../render/MessageNotice";
 
 export interface UnsubmittedVideosListItemProps {

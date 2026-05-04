@@ -30,6 +30,7 @@ import { waitFor } from "../utils/";
 import { AnimationUtils } from "../utils/animationUtils";
 import { defaultPreviewTime } from "../utils/constants";
 import { durationEquals } from "../utils/duraionUtils";
+import { removePageCidMap } from "../utils/exporter";
 import { getErrorMessage, getFormattedTime } from "../utils/formating";
 import { getHash, getVideoIDHash, HashedValue } from "../utils/hash";
 import { getCidMapFromWindow } from "../utils/injectedScriptMessageUtils";
@@ -155,25 +156,6 @@ async function storePageCidMap(bvid: BVID): Promise<void> {
     const cidMap = await getCidMapFromWindow(bvid);
     if (cidMap && cidMap.size > 0) {
         mapData[bvid] = Object.fromEntries(cidMap);
-        Config.local!.videoPageCidMap = mapData;
-        Config.forceLocalUpdate("videoPageCidMap");
-    }
-}
-
-export function removePageCidMap(videoID: NewVideoID): void {
-    const bvid = parseBvidAndCidFromVideoId(videoID).bvId;
-
-    // 判断当前稿件中任意分P是否还有未提交片段，若有则暂不清除映射
-    const segmentData = Config.local!.unsubmittedSegments ?? {};
-    const bvidHasSegments = Object.keys(segmentData).some(segmentVideoID => {
-        const segmentBvid = parseBvidAndCidFromVideoId(segmentVideoID as NewVideoID).bvId;
-        return segmentBvid === bvid;
-    });
-    if (bvidHasSegments) return;
-
-    const mapData = Config.local!.videoPageCidMap ?? {};
-    if (mapData[bvid]) {
-        delete mapData[bvid];
         Config.local!.videoPageCidMap = mapData;
         Config.forceLocalUpdate("videoPageCidMap");
     }

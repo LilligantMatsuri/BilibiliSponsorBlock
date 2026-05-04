@@ -125,6 +125,25 @@ export function normalizeChapterName(description: string): string {
         .replace(/\s+/g, " ");
 }
 
+export function removePageCidMap(videoID: NewVideoID): void {
+    const bvid = parseBvidAndCidFromVideoId(videoID).bvId;
+
+    // 判断当前稿件中任意分P是否还有未提交片段，若有则暂不清除映射
+    const segmentData = Config.local!.unsubmittedSegments ?? {};
+    const bvidHasSegments = Object.keys(segmentData).some(segmentVideoID => {
+        const segmentBvid = parseBvidAndCidFromVideoId(segmentVideoID as NewVideoID).bvId;
+        return segmentBvid === bvid;
+    });
+    if (bvidHasSegments) return;
+
+    const mapData = Config.local!.videoPageCidMap ?? {};
+    if (mapData[bvid]) {
+        delete mapData[bvid];
+        Config.local!.videoPageCidMap = mapData;
+        Config.forceLocalUpdate("videoPageCidMap");
+    }
+}
+
 export function buildVideoUrl(videoID: NewVideoID): string {
     const { bvId, cid } = parseBvidAndCidFromVideoId(videoID);
     const videoUrl = `https://www.bilibili.com/video/${bvId}/`;
