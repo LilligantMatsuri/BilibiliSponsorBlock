@@ -515,7 +515,6 @@ export function startOrEndTimingNewSegment(): void {
             actionType: ActionType.Skip,
             source: SponsorSourceType.Local,
         });
-        storePageCidMap(getBvID()!);
     } else {
         const existingSegment = getIncompleteSegment();
         const existingTime = existingSegment.segment[0];
@@ -524,6 +523,7 @@ export function startOrEndTimingNewSegment(): void {
         existingSegment.segment = [Math.min(existingTime, currentTime), Math.max(existingTime, currentTime)];
     }
 
+    storePageCidMap(getBvID()!);
     Config.local.unsubmittedSegments[getVideoID()] = contentState.sponsorTimesSubmitting;
     Config.forceLocalUpdate("unsubmittedSegments");
 
@@ -681,6 +681,7 @@ export function importSegments(importedSegments: SponsorTime[]): void {
         return;
     }
 
+    storePageCidMap(getBvID()!);
     Config.local.unsubmittedSegments[getVideoID()] = contentState.sponsorTimesSubmitting;
     Config.forceLocalUpdate("unsubmittedSegments");
 
@@ -1015,8 +1016,8 @@ export function checkForPreloadedSegment(): void {
     }
 
     if (pushed) {
+        storePageCidMap(getBvID()!);
         Config.local.unsubmittedSegments[getVideoID()] = contentState.sponsorTimesSubmitting;
         Config.forceLocalUpdate("unsubmittedSegments");
-        storePageCidMap(getBvID()!);
     }
 }
