@@ -28,6 +28,24 @@ export const getSkipNoticeContentContainer: ContentContainer = () => ({
     updateEditButtonsOnPlayer: () => {
         void getContentApp().commands.execute("ui/updatePlayerButtons", undefined);
     },
+    addSubmittingSegment: (segment) => {
+        void getContentApp().commands.execute("segments/addSubmitting", {
+            segment,
+            source: "skipNoticeContentContainer.addSubmittingSegment",
+        });
+    },
+    replaceSubmittingSegments: (segments) => {
+        void getContentApp().commands.execute("segments/replaceSubmitting", {
+            segments,
+            source: "skipNoticeContentContainer.replaceSubmittingSegments",
+        });
+    },
+    removeSubmittingSegment: (index) => {
+        void getContentApp().commands.execute("segments/removeSubmitting", {
+            index,
+            source: "skipNoticeContentContainer.removeSubmittingSegment",
+        });
+    },
     previewTime: (time: number, unpause?: boolean) =>
         getContentApp().commands.execute("skip/previewTime", { time, unpause }),
     videoInfo: contentState.videoInfo,

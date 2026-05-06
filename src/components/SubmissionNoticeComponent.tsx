@@ -284,19 +284,19 @@ class SubmissionNoticeComponent extends React.Component<SubmissionNoticeProps, S
     }
 
     sortSegments(): void {
-        let sponsorTimesSubmitting = this.props.contentContainer().sponsorTimesSubmitting;
-        sponsorTimesSubmitting = sponsorTimesSubmitting.sort((a, b) => a.segment[0] - b.segment[0]);
+        const sponsorTimesSubmitting = [...this.props.contentContainer().sponsorTimesSubmitting].sort(
+            (a, b) => a.segment[0] - b.segment[0]
+        );
 
-        Config.local.unsubmittedSegments[this.props.contentContainer().sponsorVideoID] = sponsorTimesSubmitting;
-        Config.forceLocalUpdate("unsubmittedSegments");
-
+        this.props.contentContainer().replaceSubmittingSegments(sponsorTimesSubmitting);
         this.forceUpdate();
     }
 
     exportSegments() {
         const sponsorTimesSubmitting = this.props
             .contentContainer()
-            .sponsorTimesSubmitting.sort((a, b) => a.segment[0] - b.segment[0]);
+            .sponsorTimesSubmitting.slice()
+            .sort((a, b) => a.segment[0] - b.segment[0]);
         window.navigator.clipboard.writeText(exportTimes(sponsorTimesSubmitting));
 
         new GenericNotice(null, "exportCopied", {

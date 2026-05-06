@@ -19,6 +19,9 @@ export interface ContentContainer {
         sponsorSubmissionNotice: SubmissionNotice;
         resetSponsorSubmissionNotice: (callRef?: boolean) => void;
         updateEditButtonsOnPlayer: () => void;
+        addSubmittingSegment: (segment: SponsorTime) => void;
+        replaceSubmittingSegments: (segments: SponsorTime[]) => void;
+        removeSubmittingSegment: (index: number) => void;
         previewTime: (time: number, unpause?: boolean) => void;
         videoInfo: VideoInfo;
         getRealCurrentTime: () => number;

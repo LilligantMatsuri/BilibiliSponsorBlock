@@ -235,7 +235,6 @@ async function videoIDChange(): Promise<void> {
     void app.commands.execute("segments/lookup", {});
     checkPageForNewThumbnails();
 
-    contentState.sponsorTimesSubmitting = [];
     void app.commands.execute("segments/updateSubmitting", { getFromConfig: true });
 
     const loadingPanel = await waitFor(() => document.querySelector(".bpx-player-loading-panel.bpx-state-loading"), 5000, 5)

@@ -641,7 +641,6 @@ class SkipNoticeComponent extends React.Component<SkipNoticeProps, SkipNoticeSta
     }
 
     copyDownvote(index: number): void {
-        const sponsorVideoID = this.props.contentContainer().sponsorVideoID;
         const sponsorTimesSubmitting: SponsorTime = {
             cid: getCid(),
             segment: this.segments[index].segment,
@@ -651,15 +650,8 @@ class SkipNoticeComponent extends React.Component<SkipNoticeProps, SkipNoticeSta
             source: SponsorSourceType.Local,
         };
 
-        const segmentTimes = Config.local.unsubmittedSegments[sponsorVideoID] || [];
-        segmentTimes.push(sponsorTimesSubmitting);
-        Config.local.unsubmittedSegments[sponsorVideoID] = segmentTimes;
-        Config.forceLocalUpdate("unsubmittedSegments");
-
-        this.props.contentContainer().sponsorTimesSubmitting.push(sponsorTimesSubmitting);
-        this.props.contentContainer().updatePreviewBar();
+        this.props.contentContainer().addSubmittingSegment(sponsorTimesSubmitting);
         this.props.contentContainer().resetSponsorSubmissionNotice();
-        this.props.contentContainer().updateEditButtonsOnPlayer();
 
         this.contentContainer().vote(0, this.segments[index].UUID, undefined, this);
 

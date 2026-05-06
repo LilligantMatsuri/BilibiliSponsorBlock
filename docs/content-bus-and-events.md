@@ -1,5 +1,5 @@
 # Content 内部总线与事件说明
-最后更新：2026-04-03
+最后更新：2026-05-06
 
 这份文档总结当前 content script 内部的消息总线结构、事件列表，以及几条最重要事件链的触发顺序和内在逻辑。
 
@@ -73,12 +73,12 @@ content 内部现在分成四层：
 | `player/timeUpdated` | 当前时间投影已更新 | `src/content/previewBarManager.ts` | 暂无 | emit-only |
 | `player/videoReady` | video 已 ready，可以挂载 UI | `src/content/videoListeners.ts` | `src/content/previewBarManager.ts` | active |
 | `player/durationChanged` | duration 变化 | `src/content/videoListeners.ts` | `src/content/previewBarManager.ts` | active |
-| `player/play` | 原始 play 事件 | `src/content/videoListeners.ts` | 暂无 | emit-only |
-| `player/playing` | 原始 playing 事件 | `src/content/videoListeners.ts` | 暂无 | emit-only |
-| `player/seeking` | 原始 seeking 事件 | `src/content/videoListeners.ts` | 暂无 | emit-only |
-| `player/pause` | 原始 pause 事件 | `src/content/videoListeners.ts` | 暂无 | emit-only |
-| `player/waiting` | 原始 waiting 事件 | `src/content/videoListeners.ts` | 暂无 | emit-only |
-| `player/rateChanged` | 播放速率变化 | `src/content/videoListeners.ts` | 暂无 | emit-only |
+| `player/play` | 原始 play 事件 | `src/content/videoListeners.ts` | `src/content/skipScheduler.ts` | active |
+| `player/playing` | 原始 playing 事件 | `src/content/videoListeners.ts` | `src/content/skipScheduler.ts` | active |
+| `player/seeking` | 原始 seeking 事件 | `src/content/videoListeners.ts` | `src/content/skipScheduler.ts` | active |
+| `player/pause` | 原始 pause 事件 | `src/content/videoListeners.ts` | `src/content/skipScheduler.ts` | active |
+| `player/waiting` | 原始 waiting 事件 | `src/content/videoListeners.ts` | `src/content/skipScheduler.ts` | active |
+| `player/rateChanged` | 播放速率变化 | `src/content/videoListeners.ts` | `src/content/skipScheduler.ts` | active |
 | `ui/popupClosed` | 内嵌 popup iframe 已关闭 | `src/content/segmentSubmission.ts` | 暂无 | emit-only |
 
 ## 4. Command 命名空间
@@ -88,12 +88,29 @@ content 内部现在分成四层：
 | 命名空间 | 作用 |
 | --- | --- |
 | `segment/*` | 创建、取消、预览、提交、投票、submission notice 控制 |
-| `segments/*` | 拉取正式分段、更新草稿快照、导入分段、选中 segment |
+| `segments/*` | 拉取正式分段、更新草稿快照、统一修改草稿、导入分段、选中 segment |
 | `skip/*` | skip 调度、skip 执行、preview time、virtual time 相关逻辑 |
 | `ui/*` | preview bar、player buttons、pill、active segment 投影 |
 | `popup/*` | 打开和关闭内嵌 popup |
 | `port/*` | port-video 提交、投票、刷新 |
 | `config/*` | 基于配置触发的 UI 副作用 |
+
+`segments/*` 里有一组专门用于本地草稿 segment 的写入口：
+
+- `segments/updateSubmitting`：从 `Config.local.unsubmittedSegments` 和 URL hash 重新加载当前视频草稿。
+- `segments/addSubmitting`：追加一个草稿 segment。
+- `segments/replaceSubmitting`：替换当前草稿集合。
+- `segments/removeSubmitting`：按 index 删除一个草稿 segment。
+- `segments/clearSubmitting`：清空当前视频草稿，并删除对应 local config。
+
+这些 command 最终都收口到 `src/content/segmentSubmission.ts` 内部的提交 helper。它们统一负责：
+
+1. 更新 `contentState.sponsorTimesSubmitting`。
+2. 写入或删除 `Config.local.unsubmittedSegments[videoID]`。
+3. 同步 `app.store`。
+4. 发出 `segments/submittingChanged`。
+
+组件和其他入口不应再直接 `push`、`splice`、`sort` 或赋值 `sponsorTimesSubmitting`，也不应绕过这组入口直接维护当前视频的 `unsubmittedSegments`。
 
 ## 5. 核心事件链
 
@@ -178,27 +195,35 @@ payload：
 
 上游来源：
 
-- `updateSponsorTimesSubmitting()`
-- `clearSponsorTimes()`
+- `segments/updateSubmitting`
+- `segments/addSubmitting`
+- `segments/replaceSubmitting`
+- `segments/removeSubmitting`
+- `segments/clearSubmitting`
+- `segments/import`
 - `sendSubmitMessage()` 成功后草稿清空
 
 触发顺序：
 
-1. 更新 `contentState.sponsorTimesSubmitting`。
-2. `emitSubmittingChanged()` 先同步 store。
-3. 然后发出 `segments/submittingChanged`。
-4. `previewBarManager` 刷新 preview bar。
-5. `skipScheduler` 重新评估 schedule。
-6. `segmentSubmission` 作为 UI bridge，刷新 player buttons 和当前 submission notice。
+1. 调用方通过 `segments/*` command 或 `segmentSubmission` 内部 helper 请求草稿变化。
+2. `segmentSubmission` 统一 clone 并提交下一版草稿数组。
+3. 如果需要持久化，同步写入或删除 `Config.local.unsubmittedSegments[videoID]`。
+4. 更新 `contentState.sponsorTimesSubmitting`。
+5. `emitSubmittingChanged()` 先同步 store。
+6. 然后发出 `segments/submittingChanged`。
+7. `previewBarManager` 刷新 preview bar。
+8. `skipScheduler` 重新评估 schedule。
+9. `segmentSubmission` 作为 UI bridge，刷新 player buttons 和当前 submission notice。
 
 内在逻辑：
 
 - “草稿变化”被视为稳定业务事实，而不是一串 UI 直调。
 - 发射方不需要知道有哪些 UI 会跟着刷新。
+- 当前草稿数组的 mutation 入口只有 `segmentSubmission` 内部 helper；组件通过 `skipNoticeContentContainer` 的窄 facade 调 command。
 
 ### 5.5 `segment/updated`
 
-这是这次补进去的局部 segment 更新事件。
+这是局部 segment 更新事件。
 
 事件来源：
 
@@ -226,7 +251,33 @@ payload：
 - 事件 reason 是业务语义，而不是 UI 行为语义。
 - 这条链只处理内容脚本内部联动，不修改 popup/background 现有协议。
 
-### 5.6 `skip/noticeRequested` 与 `skip/buttonStateChanged`
+### 5.6 player playback scheduling
+
+播放器事实事件现在也是 skip 调度的主要入口。
+
+事件来源：
+
+- `src/content/videoListeners.ts`
+
+订阅方：
+
+- `src/content/skipScheduler.ts`
+
+触发顺序：
+
+1. `videoListeners` 只绑定 DOM video listener，并发出 `player/play`、`player/playing`、`player/seeking`、`player/pause`、`player/waiting`、`player/rateChanged`。
+2. `skipScheduler` 订阅这些事件，并维护播放调度相关状态，例如 last check time、waiting 状态、paused-at-zero 状态。
+3. `play` / `playing` / `rateChanged` 会更新 virtual time，并在需要时重建 schedule。
+4. 播放中的 `seeking` 会按当前 seek 规则重建 schedule；暂停中的 `seeking` 只刷新 active segment。
+5. `pause` / `waiting` 会更新 last-known time、waiting time，并取消当前 schedule。
+
+内在逻辑：
+
+- `videoListeners` 是播放器事实适配器，不再直接执行 playback scheduling 业务逻辑。
+- `skipScheduler` 是播放调度状态机的归属方。
+- `setupVideoListeners()` 末尾仍保留一次初始 `skip/startSchedule` direct command，用来在 listener 安装后启动初始调度；它不是 play/pause/seek 事件响应。
+
+### 5.7 `skip/noticeRequested` 与 `skip/buttonStateChanged`
 
 这两条事件现在是 skip UI 的边界。
 

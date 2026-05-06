@@ -56,7 +56,10 @@ function checkDanmaku(text: string, offset: number) {
         if (Config.config.enableMenuDanmakuSkip) {
             setTimeout(() => {
                 if (!contentState.sponsorTimesSubmitting?.some((s) => s.segment[1] === skippingSegments[0].segment[1])) {
-                    contentState.sponsorTimesSubmitting.push(skippingSegments[0]);
+                    void getContentApp().commands.execute("segments/addSubmitting", {
+                        segment: skippingSegments[0],
+                        source: "danmakuSkip.checkDanmaku",
+                    });
                 }
                 void getContentApp().commands.execute("segment/openSubmissionMenu", undefined);
             }, Config.config.skipNoticeDuration * 1000 + 500);

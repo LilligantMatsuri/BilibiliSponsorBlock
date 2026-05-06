@@ -146,6 +146,14 @@ export interface ContentCommandMap {
         forceUpdatePreviewBar?: boolean;
     }, void>;
     "segments/updateSubmitting": ContentCommandDefinition<{ getFromConfig?: boolean }, void>;
+    "segments/addSubmitting": ContentCommandDefinition<{ segment: SponsorTime; source?: string }, void>;
+    "segments/replaceSubmitting": ContentCommandDefinition<{
+        segments: SponsorTime[];
+        source?: string;
+        getFromConfig?: boolean;
+    }, void>;
+    "segments/removeSubmitting": ContentCommandDefinition<{ index: number; source?: string }, void>;
+    "segments/clearSubmitting": ContentCommandDefinition<{ source?: string; resetNotice?: boolean }, void>;
     "segments/import": ContentCommandDefinition<{ importedSegments: SponsorTime[] }, void>;
     "segments/select": ContentCommandDefinition<{ UUID: SegmentUUID | null }, void>;
     "skip/startSchedule": ContentCommandDefinition<{

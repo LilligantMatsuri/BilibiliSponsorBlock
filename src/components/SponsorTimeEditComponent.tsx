@@ -11,7 +11,6 @@ import { asyncRequestToServer } from "../requests/requests";
 import { ActionType, Category, ChannelIDStatus, SponsorTime } from "../types";
 import { DEFAULT_CATEGORY } from "../utils/categoryUtils";
 import { defaultPreviewTime } from "../utils/constants";
-import { removePageCidMap } from "../utils/exporter";
 import { getFormattedTime, getFormattedTimeToSeconds } from "../utils/formating";
 import { getFrameRate, getVideo } from "../utils/video";
 import { SelectorOption } from "./SelectorComponent";
@@ -599,8 +598,12 @@ class SponsorTimeEditComponent extends React.Component<SponsorTimeEditProps, Spo
         if (time === null) time = sponsorTime.segment[0];
 
         const addedTime = sponsorTime.segment.length === 1;
-        sponsorTime.segment[index] = time;
-        if (sponsorTime.actionType === ActionType.Poi) sponsorTime.segment[1] = time;
+        const nextSponsorTime = {
+            ...sponsorTime,
+            segment: [...sponsorTime.segment] as SponsorTime["segment"],
+        };
+        nextSponsorTime.segment[index] = time;
+        if (nextSponsorTime.actionType === ActionType.Poi) nextSponsorTime.segment[1] = time;
 
         if (addedTime) {
             this.props.contentContainer().updateEditButtonsOnPlayer();
@@ -608,7 +611,7 @@ class SponsorTimeEditComponent extends React.Component<SponsorTimeEditProps, Spo
 
         this.setState(
             {
-                sponsorTimeEdits: this.getFormattedSponsorTimesEdits(sponsorTime),
+                sponsorTimeEdits: this.getFormattedSponsorTimesEdits(nextSponsorTime),
             },
             () => this.saveEditTimes()
         );
@@ -655,7 +658,15 @@ class SponsorTimeEditComponent extends React.Component<SponsorTimeEditProps, Spo
         this.lastEditTime = Date.now();
         this.editTimeTimeout = null;
 
-        const sponsorTimesSubmitting = this.props.contentContainer().sponsorTimesSubmitting;
+        const sponsorTimesSubmitting = this.props
+            .contentContainer()
+            .sponsorTimesSubmitting.map((segment) => ({
+                ...segment,
+                segment: [...segment.segment] as SponsorTime["segment"],
+            }));
+        const sponsorTime = sponsorTimesSubmitting[this.props.index];
+        if (!sponsorTime) return;
+
         const category = this.categoryOptionRef.current.value as Category;
 
         if (this.state.editing) {
@@ -664,42 +675,39 @@ class SponsorTimeEditComponent extends React.Component<SponsorTimeEditProps, Spo
 
             // Change segment time only if the format was correct
             if (startTime !== null && endTime !== null) {
-                const addingTime = sponsorTimesSubmitting[this.props.index].segment.length === 1;
-                sponsorTimesSubmitting[this.props.index].segment = [startTime, endTime];
+                const addingTime = sponsorTime.segment.length === 1;
+                sponsorTime.segment = [startTime, endTime];
 
                 if (addingTime) {
                     this.props.contentContainer().updateEditButtonsOnPlayer();
                 }
             } else if (startTime !== null) {
                 // Only start time is valid, still an incomplete segment
-                sponsorTimesSubmitting[this.props.index].segment[0] = startTime;
+                sponsorTime.segment[0] = startTime;
             }
         } else if (
             this.state.sponsorTimeEdits[1] === null &&
             category === "outro" &&
-            !sponsorTimesSubmitting[this.props.index].segment[1]
+            !sponsorTime.segment[1]
         ) {
-            sponsorTimesSubmitting[this.props.index].segment[1] = getVideo().duration;
+            sponsorTime.segment[1] = getVideo().duration;
             this.props.contentContainer().updateEditButtonsOnPlayer();
         }
 
-        sponsorTimesSubmitting[this.props.index].category = category;
+        sponsorTime.category = category;
 
         const actionType = this.getNextActionType(category, action);
-        sponsorTimesSubmitting[this.props.index].actionType = actionType;
+        sponsorTime.actionType = actionType;
         this.setState({
             selectedActionType: actionType,
         });
 
-        Config.local.unsubmittedSegments[this.props.contentContainer().sponsorVideoID] = sponsorTimesSubmitting;
-        Config.forceLocalUpdate("unsubmittedSegments");
-
-        this.props.contentContainer().updatePreviewBar();
+        this.props.contentContainer().replaceSubmittingSegments(sponsorTimesSubmitting);
 
         if (
-            sponsorTimesSubmitting[this.props.index].actionType === ActionType.Full &&
-            (sponsorTimesSubmitting[this.props.index].segment[0] !== 0 ||
-                sponsorTimesSubmitting[this.props.index].segment[1] !== 0)
+            sponsorTime.actionType === ActionType.Full &&
+            (sponsorTime.segment[0] !== 0 ||
+                sponsorTime.segment[1] !== 0)
         ) {
             this.setTimeTo(0, 0);
             this.setTimeTo(1, 0);
@@ -741,30 +749,20 @@ class SponsorTimeEditComponent extends React.Component<SponsorTimeEditProps, Spo
         const sponsorTimes = this.props.contentContainer().sponsorTimesSubmitting;
         const index = this.props.index;
         const removingIncomplete = sponsorTimes[index].segment.length < 2;
+        const remainingSegmentCount = sponsorTimes.length - 1;
 
-        sponsorTimes.splice(index, 1);
-
-        //save this
-        if (sponsorTimes.length > 0) {
-            Config.local.unsubmittedSegments[this.props.contentContainer().sponsorVideoID] = sponsorTimes;
-        } else {
-            delete Config.local.unsubmittedSegments[this.props.contentContainer().sponsorVideoID];
-        }
-        Config.forceLocalUpdate("unsubmittedSegments");
-
-        this.props.contentContainer().updatePreviewBar();
+        this.props.contentContainer().removeSubmittingSegment(index);
 
         //if they are all removed
-        if (sponsorTimes.length == 0) {
+        if (remainingSegmentCount === 0) {
             this.props.submissionNotice.cancel();
-            removePageCidMap(this.props.contentContainer().sponsorVideoID);
         } else {
             //update display
             this.props.submissionNotice.forceUpdate();
         }
 
         //if it is not a complete segment, or all are removed
-        if (sponsorTimes.length === 0 || removingIncomplete) {
+        if (remainingSegmentCount === 0 || removingIncomplete) {
             //update video player
             this.props.contentContainer().updateEditButtonsOnPlayer();
         }

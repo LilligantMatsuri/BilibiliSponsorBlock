@@ -90,6 +90,113 @@ function emitSubmittingChanged(getFromConfig: boolean, source: string): void {
     );
 }
 
+interface CommitSubmittingSegmentsOptions {
+    source: string;
+    getFromConfig?: boolean;
+    persist?: boolean;
+    videoID?: NewVideoID | null;
+}
+
+function cloneSubmittingSegment(segment: SponsorTime): SponsorTime {
+    return {
+        ...segment,
+        segment: [...segment.segment] as SponsorTime["segment"],
+    };
+}
+
+function persistSubmittingSegments(videoID: NewVideoID | null, segments: SponsorTime[]): void {
+    if (!videoID) return;
+
+    if (segments.length > 0) {
+        void storePageCidMap(getBvID()!);
+        Config.local.unsubmittedSegments[videoID] = segments.map(cloneSubmittingSegment);
+    } else {
+        delete Config.local.unsubmittedSegments[videoID];
+        removePageCidMap(videoID);
+    }
+
+    Config.forceLocalUpdate("unsubmittedSegments");
+}
+
+function commitSubmittingSegments(nextSegments: SponsorTime[], options: CommitSubmittingSegmentsOptions): void {
+    const videoID = options.videoID ?? getVideoID();
+    const segments = nextSegments.map(cloneSubmittingSegment);
+
+    if (options.persist) {
+        persistSubmittingSegments(videoID, segments);
+    }
+
+    contentState.sponsorTimesSubmitting = segments;
+
+    if (options.getFromConfig && segments.length > 0) {
+        contentState.previewedSegment = true;
+    }
+
+    emitSubmittingChanged(Boolean(options.getFromConfig), options.source);
+}
+
+function loadSubmittingSegmentsFromConfig(videoID: NewVideoID | null = getVideoID()): SponsorTime[] {
+    const segmentTimes = videoID ? Config.local.unsubmittedSegments[videoID] : undefined;
+    if (segmentTimes === undefined) {
+        return [];
+    }
+
+    return segmentTimes.map((segmentTime) => ({
+        ...cloneSubmittingSegment(segmentTime),
+        cid: getCid(),
+    }));
+}
+
+function addSubmittingSegment(segment: SponsorTime, source = "segmentSubmission.addSubmittingSegment"): void {
+    commitSubmittingSegments([...contentState.sponsorTimesSubmitting, segment], {
+        source,
+        persist: true,
+    });
+}
+
+function replaceSubmittingSegments(
+    segments: SponsorTime[],
+    source = "segmentSubmission.replaceSubmittingSegments",
+    getFromConfig = false
+): void {
+    commitSubmittingSegments(segments, {
+        source,
+        getFromConfig,
+        persist: true,
+    });
+}
+
+function removeSubmittingSegment(index: number, source = "segmentSubmission.removeSubmittingSegment"): void {
+    if (index < 0 || index >= contentState.sponsorTimesSubmitting.length) {
+        return;
+    }
+
+    replaceSubmittingSegments(
+        contentState.sponsorTimesSubmitting.filter((_, i) => i !== index),
+        source
+    );
+}
+
+function clearSubmittingSegments(source = "segmentSubmission.clearSubmittingSegments", resetNotice = false): void {
+    const videoID = getVideoID();
+    const hasConfigSegments = Boolean(videoID && Config.local.unsubmittedSegments[videoID]?.length > 0);
+    const hasStateSegments = contentState.sponsorTimesSubmitting.length > 0;
+
+    if (!hasConfigSegments && !hasStateSegments) {
+        return;
+    }
+
+    if (resetNotice) {
+        resetSponsorSubmissionNotice();
+    }
+
+    commitSubmittingSegments([], {
+        source,
+        persist: true,
+        videoID,
+    });
+}
+
 function emitSegmentsLoaded(source: string): void {
     syncContentStateStore(source);
     getContentApp().bus.emit(
@@ -203,6 +310,14 @@ export function registerSegmentSubmission(): void {
     );
     app.commands.register("segments/updateSubmitting", ({ getFromConfig }) =>
         updateSponsorTimesSubmitting(getFromConfig)
+    );
+    app.commands.register("segments/addSubmitting", ({ segment, source }) => addSubmittingSegment(segment, source));
+    app.commands.register("segments/replaceSubmitting", ({ segments, source, getFromConfig }) =>
+        replaceSubmittingSegments(segments, source, getFromConfig)
+    );
+    app.commands.register("segments/removeSubmitting", ({ index, source }) => removeSubmittingSegment(index, source));
+    app.commands.register("segments/clearSubmitting", ({ source, resetNotice }) =>
+        clearSubmittingSegments(source, resetNotice)
     );
     app.commands.register("segments/import", ({ importedSegments }) => importSegments(importedSegments));
     app.commands.register("ui/updatePlayerButtons", () => updateVisibilityOfPlayerControlsButton());
@@ -506,8 +621,10 @@ export function getRealCurrentTime(): number {
 
 export function startOrEndTimingNewSegment(): void {
     const roundedTime = Math.round((getRealCurrentTime() + Number.EPSILON) * 1000) / 1000;
+    const nextSegments = contentState.sponsorTimesSubmitting.map(cloneSubmittingSegment);
+
     if (!isSegmentCreationInProgress()) {
-        contentState.sponsorTimesSubmitting.push({
+        nextSegments.push({
             cid: getCid(),
             segment: [roundedTime],
             UUID: generateUserID() as SegmentUUID,
@@ -516,19 +633,15 @@ export function startOrEndTimingNewSegment(): void {
             source: SponsorSourceType.Local,
         });
     } else {
-        const existingSegment = getIncompleteSegment();
+        const existingSegment = nextSegments[nextSegments.length - 1];
         const existingTime = existingSegment.segment[0];
         const currentTime = roundedTime;
 
         existingSegment.segment = [Math.min(existingTime, currentTime), Math.max(existingTime, currentTime)];
     }
 
-    storePageCidMap(getBvID()!);
-    Config.local.unsubmittedSegments[getVideoID()] = contentState.sponsorTimesSubmitting;
-    Config.forceLocalUpdate("unsubmittedSegments");
-
+    replaceSubmittingSegments(nextSegments, "segmentSubmission.startOrEndTimingNewSegment");
     sponsorsLookup(true, true);
-    updateSponsorTimesSubmitting(false);
 
     if (
         contentState.lastResponseStatus !== 200 &&
@@ -555,47 +668,33 @@ export function isSegmentCreationInProgress(): boolean {
 export function cancelCreatingSegment(): void {
     if (isSegmentCreationInProgress()) {
         if (contentState.sponsorTimesSubmitting.length > 1) {
-            contentState.sponsorTimesSubmitting.pop();
-            Config.local.unsubmittedSegments[getVideoID()] = contentState.sponsorTimesSubmitting;
+            removeSubmittingSegment(
+                contentState.sponsorTimesSubmitting.length - 1,
+                "segmentSubmission.cancelCreatingSegment"
+            );
         } else {
-            resetSponsorSubmissionNotice();
-            contentState.sponsorTimesSubmitting = [];
-            delete Config.local.unsubmittedSegments[getVideoID()];
+            clearSubmittingSegments("segmentSubmission.cancelCreatingSegment", true);
         }
-        Config.forceLocalUpdate("unsubmittedSegments");
-        removePageCidMap(getVideoID()!);
     }
-
-    updateSponsorTimesSubmitting(false);
 }
 
 export function updateSponsorTimesSubmitting(getFromConfig = true): void {
-    const segmentTimes = Config.local.unsubmittedSegments[getVideoID()];
-
-    if (getFromConfig && segmentTimes != undefined) {
-        contentState.sponsorTimesSubmitting = [];
-
-        for (const segmentTime of segmentTimes) {
-            contentState.sponsorTimesSubmitting.push({
-                cid: getCid(),
-                segment: segmentTime.segment,
-                UUID: segmentTime.UUID,
-                category: segmentTime.category,
-                actionType: segmentTime.actionType,
-                source: segmentTime.source,
-            });
-        }
-
-        if (contentState.sponsorTimesSubmitting.length > 0) {
-            contentState.previewedSegment = true;
-        }
-    }
-
     if (getFromConfig) {
-        checkForPreloadedSegment();
+        const preloaded = getSubmittingSegmentsWithPreloaded(loadSubmittingSegmentsFromConfig());
+        commitSubmittingSegments(preloaded.segments, {
+            source: "segmentSubmission.updateSponsorTimesSubmitting",
+            getFromConfig,
+            persist: preloaded.pushed,
+        });
+
+        return;
     }
 
-    emitSubmittingChanged(getFromConfig, "segmentSubmission.updateSponsorTimesSubmitting");
+    commitSubmittingSegments(contentState.sponsorTimesSubmitting, {
+        source: "segmentSubmission.updateSponsorTimesSubmitting",
+        getFromConfig,
+        persist: false,
+    });
 }
 
 export function openInfoMenu(): void {
@@ -645,34 +744,22 @@ export function closeInfoMenu(): void {
 }
 
 export function clearSponsorTimes(): void {
-    const currentVideoID = getVideoID();
-
-    const sponsorTimes = Config.local.unsubmittedSegments[currentVideoID];
-
-    if (sponsorTimes != undefined && sponsorTimes.length > 0) {
-        resetSponsorSubmissionNotice();
-
-        delete Config.local.unsubmittedSegments[currentVideoID];
-        Config.forceLocalUpdate("unsubmittedSegments");
-        removePageCidMap(getVideoID()!);
-
-        contentState.sponsorTimesSubmitting = [];
-        emitSubmittingChanged(false, "segmentSubmission.clearSponsorTimes");
-    }
+    clearSubmittingSegments("segmentSubmission.clearSponsorTimes", true);
 }
 
 export function importSegments(importedSegments: SponsorTime[]): void {
     let addedSegments = false;
+    const nextSegments = contentState.sponsorTimesSubmitting.map(cloneSubmittingSegment);
 
     for (const segment of importedSegments) {
         if (
-            !contentState.sponsorTimesSubmitting.some(
+            !nextSegments.some(
                 (s) =>
                     Math.abs(s.segment[0] - segment.segment[0]) < 1 &&
                     Math.abs(s.segment[1] - segment.segment[1]) < 1
             )
         ) {
-            contentState.sponsorTimesSubmitting.push(segment);
+            nextSegments.push(segment);
             addedSegments = true;
         }
     }
@@ -681,11 +768,7 @@ export function importSegments(importedSegments: SponsorTime[]): void {
         return;
     }
 
-    storePageCidMap(getBvID()!);
-    Config.local.unsubmittedSegments[getVideoID()] = contentState.sponsorTimesSubmitting;
-    Config.forceLocalUpdate("unsubmittedSegments");
-
-    updateSponsorTimesSubmitting(false);
+    replaceSubmittingSegments(nextSegments, "segmentSubmission.importSegments");
     openSubmissionMenu();
 }
 
@@ -880,14 +963,20 @@ export async function sendSubmitMessage(): Promise<boolean> {
         updateSegmentSubmitting()
     );
 
-    for (let i = 0; i < contentState.sponsorTimesSubmitting.length; i++) {
-        if (contentState.sponsorTimesSubmitting[i].segment[1] > getVideo().duration) {
-            contentState.sponsorTimesSubmitting[i].segment[1] = getVideo().duration;
+    let adjustedSegmentDuration = false;
+    const normalizedSegments = contentState.sponsorTimesSubmitting.map((segment) => {
+        const nextSegment = cloneSubmittingSegment(segment);
+        if (nextSegment.segment[1] > getVideo().duration) {
+            nextSegment.segment[1] = getVideo().duration;
+            adjustedSegmentDuration = true;
         }
-    }
 
-    Config.local.unsubmittedSegments[getVideoID()] = contentState.sponsorTimesSubmitting;
-    Config.forceLocalUpdate("unsubmittedSegments");
+        return nextSegment;
+    });
+
+    if (adjustedSegmentDuration) {
+        replaceSubmittingSegments(normalizedSegments, "segmentSubmission.sendSubmitMessage.normalizeDuration");
+    }
 
     if (Config.config.minDuration > 0) {
         for (let i = 0; i < contentState.sponsorTimesSubmitting.length; i++) {
@@ -913,11 +1002,7 @@ export async function sendSubmitMessage(): Promise<boolean> {
     if (response.status === 200) {
         stopAnimation();
 
-        delete Config.local.unsubmittedSegments[getVideoID()];
-        Config.forceLocalUpdate("unsubmittedSegments");
-        removePageCidMap(getVideoID()!);
-
-        const newSegments = contentState.sponsorTimesSubmitting;
+        const newSegments = contentState.sponsorTimesSubmitting.map(cloneSubmittingSegment);
         try {
             const receivedNewSegments = JSON.parse(response.responseText);
             if (receivedNewSegments?.length === newSegments.length) {
@@ -930,14 +1015,13 @@ export async function sendSubmitMessage(): Promise<boolean> {
 
         contentState.sponsorTimes = (contentState.sponsorTimes || []).concat(newSegments).sort((a, b) => a.segment[0] - b.segment[0]);
 
-        Config.config.sponsorTimesContributed = Config.config.sponsorTimesContributed + contentState.sponsorTimesSubmitting.length;
+        Config.config.sponsorTimesContributed = Config.config.sponsorTimesContributed + newSegments.length;
 
         Config.config.submissionCountSinceCategories = Config.config.submissionCountSinceCategories + 1;
 
-        contentState.sponsorTimesSubmitting = [];
+        clearSubmittingSegments("segmentSubmission.sendSubmitMessage.success");
 
         emitSegmentsLoaded("segmentSubmission.sendSubmitMessage.success");
-        emitSubmittingChanged(false, "segmentSubmission.sendSubmitMessage.success");
 
         const fullVideoSegment = contentState.sponsorTimes.filter((time) => time.actionType === ActionType.Full)[0];
         if (fullVideoSegment) {
@@ -984,23 +1068,29 @@ export function getSegmentsMessage(sponsorTimes: SponsorTime[]): string {
     return sponsorTimesMessage;
 }
 
-export function checkForPreloadedSegment(): void {
-    if (loadedPreloadedSegment) return;
+function getSubmittingSegmentsWithPreloaded(baseSegments: SponsorTime[]): { segments: SponsorTime[]; pushed: boolean } {
+    if (loadedPreloadedSegment) {
+        return {
+            segments: baseSegments.map(cloneSubmittingSegment),
+            pushed: false,
+        };
+    }
 
     loadedPreloadedSegment = true;
     const hashParams = getHashParams();
 
     let pushed = false;
+    const nextSegments = baseSegments.map(cloneSubmittingSegment);
     const segments = hashParams.segments;
     if (Array.isArray(segments)) {
         for (const segment of segments) {
             if (Array.isArray(segment.segment)) {
                 if (
-                    !contentState.sponsorTimesSubmitting.some(
-                        (s) => s.segment[0] === segment.segment[0] && s.segment[1] === s.segment[1]
+                    !nextSegments.some(
+                        (s) => s.segment[0] === segment.segment[0] && s.segment[1] === segment.segment[1]
                     )
                 ) {
-                    contentState.sponsorTimesSubmitting.push({
+                    nextSegments.push({
                         cid: getCid(),
                         segment: segment.segment,
                         UUID: generateUserID() as SegmentUUID,
@@ -1015,9 +1105,16 @@ export function checkForPreloadedSegment(): void {
         }
     }
 
-    if (pushed) {
-        storePageCidMap(getBvID()!);
-        Config.local.unsubmittedSegments[getVideoID()] = contentState.sponsorTimesSubmitting;
-        Config.forceLocalUpdate("unsubmittedSegments");
+    return {
+        segments: nextSegments,
+        pushed,
+    };
+}
+
+export function checkForPreloadedSegment(): void {
+    const preloaded = getSubmittingSegmentsWithPreloaded(contentState.sponsorTimesSubmitting);
+
+    if (preloaded.pushed) {
+        replaceSubmittingSegments(preloaded.segments, "segmentSubmission.checkForPreloadedSegment");
     }
 }
