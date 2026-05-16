@@ -525,12 +525,13 @@ class SponsorTimeEditComponent extends React.Component<SponsorTimeEditProps, Spo
     }
 
     private handleReplacingLostTimes(category: Category, actionType: ActionType, segment: SponsorTime): void {
-        if (CompileConfig.categorySupport[category]?.includes(ActionType.Poi)) {
+        const nextActionType = this.getNextActionType(category, actionType);
+
+        if (nextActionType === ActionType.Poi) {
             if (this.previousSkipType !== ActionType.Poi) {
                 this.timesBeforeChanging = [null, segment.segment[1]];
             }
 
-            this.setTimeTo(1, null);
             this.props.contentContainer().updateEditButtonsOnPlayer();
 
             if (
@@ -544,28 +545,16 @@ class SponsorTimeEditComponent extends React.Component<SponsorTimeEditProps, Spo
             }
 
             this.previousSkipType = ActionType.Poi;
-        } else if (
-            CompileConfig.categorySupport[category]?.length === 1 &&
-            CompileConfig.categorySupport[category]?.[0] === ActionType.Full
-        ) {
+        } else if (nextActionType === ActionType.Full) {
             if (this.previousSkipType !== ActionType.Full) {
                 this.timesBeforeChanging = [...segment.segment];
             }
 
             this.previousSkipType = ActionType.Full;
         } else if (
-            (category === "chooseACategory" ||
-                (CompileConfig.categorySupport[category]?.includes(ActionType.Skip) &&
-                    ![ActionType.Poi, ActionType.Full].includes(this.getNextActionType(category, actionType)))) &&
+            (category === "chooseACategory" || ![ActionType.Poi, ActionType.Full].includes(nextActionType)) &&
             this.previousSkipType !== ActionType.Skip
         ) {
-            if (this.timesBeforeChanging[0]) {
-                this.setTimeTo(0, this.timesBeforeChanging[0]);
-            }
-            if (this.timesBeforeChanging[1]) {
-                this.setTimeTo(1, this.timesBeforeChanging[1]);
-            }
-
             this.previousSkipType = ActionType.Skip;
         }
     }
@@ -668,6 +657,7 @@ class SponsorTimeEditComponent extends React.Component<SponsorTimeEditProps, Spo
         if (!sponsorTime) return;
 
         const category = this.categoryOptionRef.current.value as Category;
+        const previousActionType = sponsorTime.actionType;
 
         if (this.state.editing) {
             const startTime = getFormattedTimeToSeconds(this.state.sponsorTimeEdits[0]);
@@ -694,24 +684,35 @@ class SponsorTimeEditComponent extends React.Component<SponsorTimeEditProps, Spo
             this.props.contentContainer().updateEditButtonsOnPlayer();
         }
 
-        sponsorTime.category = category;
-
         const actionType = this.getNextActionType(category, action);
+        sponsorTime.category = category;
         sponsorTime.actionType = actionType;
+
+        if (actionType === ActionType.Full) {
+            sponsorTime.segment = [0, 0];
+        } else if (previousActionType === ActionType.Full && this.timesBeforeChanging.length > 0) {
+            sponsorTime.segment = [...this.timesBeforeChanging] as SponsorTime["segment"];
+        } else if (previousActionType === ActionType.Poi && ![ActionType.Poi, ActionType.Full].includes(actionType)) {
+            const nextSegment = [...sponsorTime.segment] as SponsorTime["segment"];
+            if (this.timesBeforeChanging[0] != null) {
+                nextSegment[0] = this.timesBeforeChanging[0];
+            }
+            if (this.timesBeforeChanging[1] != null) {
+                nextSegment[1] = this.timesBeforeChanging[1];
+            }
+
+            sponsorTime.segment = nextSegment;
+        }
+
+        if (actionType === ActionType.Poi) {
+            sponsorTime.segment = [sponsorTime.segment[0], sponsorTime.segment[0]];
+        }
+
         this.setState({
             selectedActionType: actionType,
         });
 
         this.props.contentContainer().replaceSubmittingSegments(sponsorTimesSubmitting);
-
-        if (
-            sponsorTime.actionType === ActionType.Full &&
-            (sponsorTime.segment[0] !== 0 ||
-                sponsorTime.segment[1] !== 0)
-        ) {
-            this.setTimeTo(0, 0);
-            this.setTimeTo(1, 0);
-        }
     }
 
     private getNextActionType(category: Category, actionType: ActionType): ActionType {
