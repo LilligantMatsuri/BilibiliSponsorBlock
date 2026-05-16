@@ -285,7 +285,7 @@ export function detectPageType(): PageType {
 let lastMutationListenerCheck = 0;
 let checkTimeout: NodeJS.Timeout | null = null;
 function setupVideoMutationListener() {
-    if (videoMutationObserver === null || !isVisible(videoMutationListenerElement!.parentElement)) {
+    if (videoMutationObserver === null || !videoMutationListenerElement?.isConnected) {
         // Delay it if it was checked recently
         if (checkTimeout) clearTimeout(checkTimeout);
         if (Date.now() - lastMutationListenerCheck < 2000) {
@@ -297,7 +297,7 @@ function setupVideoMutationListener() {
         }
 
         lastMutationListenerCheck = Date.now();
-        const mainVideoObject = getElement("#bilibili-player", true);
+        const mainVideoObject = getElement("#bilibili-player", false);
         if (!mainVideoObject) {
             logUiLifecycle("video", "error", {
                 action: "missingPlayerRoot",
@@ -484,10 +484,31 @@ export async function updateFrameRate(): Promise<number> {
 }
 
 let lastRefresh = 0;
+
+function isUsableVideoElement(candidate: HTMLVideoElement | null): boolean {
+    return Boolean(
+        candidate?.isConnected &&
+        candidate.readyState >= HTMLMediaElement.HAVE_METADATA &&
+        Number.isFinite(candidate.duration) &&
+        candidate.duration > 0
+    );
+}
+
+function shouldRefreshVideoAttachments(): boolean {
+    const currentPlayerVideo = document.querySelector("#bilibili-player video") as HTMLVideoElement | null;
+
+    return (
+        !video ||
+        !video.isConnected ||
+        (!!currentPlayerVideo && currentPlayerVideo !== video) ||
+        (!isUsableVideoElement(video) && !isVisible(video))
+    );
+}
+
 export function getVideo(): HTMLVideoElement | null {
     setupVideoMutationListener();
 
-    if (!isVisible(video) && Date.now() - lastRefresh > 500) {
+    if (shouldRefreshVideoAttachments() && Date.now() - lastRefresh > 500) {
         lastRefresh = Date.now();
         logUiLifecycle("video", "wait", {
             action: "getVideoRefreshRequested",
