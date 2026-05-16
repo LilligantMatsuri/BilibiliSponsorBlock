@@ -13,6 +13,7 @@ class advanceSkipNotices {
     segments: SponsorTime[];
     // Contains functions and variables from the content script needed by the skip notice
     contentContainer: ContentContainer;
+    onClosed: (notice: advanceSkipNotices) => void;
 
     noticeElement: HTMLDivElement;
 
@@ -26,12 +27,14 @@ class advanceSkipNotices {
         contentContainer: ContentContainer,
         unskipTime: number,
         autoSkip: boolean,
-        startReskip: boolean
+        startReskip: boolean,
+        onClosed: (notice: advanceSkipNotices) => void
     ) {
         this.advanceSkipNoticeRef = React.createRef();
 
         this.segments = segments;
         this.contentContainer = contentContainer;
+        this.onClosed = onClosed;
 
         const referenceNode = utils.findReferenceNode();
 
@@ -73,6 +76,7 @@ class advanceSkipNotices {
         this.noticeElement.remove();
 
         this.closed = true;
+        this.onClosed(this);
     }
 
     sameNotice(segments: SponsorTime[]): boolean {

@@ -1,6 +1,5 @@
 import { objectToURI } from ".";
 import Config from "../config";
-import { ContentContainer } from "../ContentContainerTypes";
 import GenericNotice, { NoticeOptions } from "../render/GenericNotice";
 import { asyncRequestToServer } from "../requests/requests";
 import { getHash } from "../utils/hash";
@@ -11,7 +10,7 @@ export interface ChatConfig {
     customDescription?: string;
 }
 
-export async function openWarningDialog(contentContainer: ContentContainer): Promise<void> {
+export async function openWarningDialog(): Promise<void> {
     const userInfo = await asyncRequestToServer("GET", "/api/userInfo", {
         publicUserID: await getHash(Config.config.userID),
         values: ["warningReason"],
@@ -64,7 +63,7 @@ export async function openWarningDialog(contentContainer: ContentContainer): Pro
             timed: false,
         };
 
-        notice = new GenericNotice(contentContainer, "warningNotice", options);
+        notice = new GenericNotice("warningNotice", options);
     }
 }
 

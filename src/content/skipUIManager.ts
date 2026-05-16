@@ -12,6 +12,46 @@ function getSkipButtonControlBar() {
     return getContentApp().ui.getState().skipButtonControlBar;
 }
 
+function removeSkipNotice(notice: SkipNotice): void {
+    const noticeIndex = contentState.skipNotices.indexOf(notice);
+    if (noticeIndex >= 0) {
+        contentState.skipNotices.splice(noticeIndex, 1);
+    }
+
+    if (contentState.activeSkipKeybindElement === notice) {
+        contentState.activeSkipKeybindElement = null;
+    }
+}
+
+function clearAdvanceSkipNotice(notice: advanceSkipNotice): void {
+    if (contentState.advanceSkipNotices === notice) {
+        contentState.advanceSkipNotices = null;
+    }
+
+    if (contentState.activeSkipKeybindElement === notice) {
+        contentState.activeSkipKeybindElement = null;
+    }
+}
+
+function closeAdvanceSkipNotice(): void {
+    contentState.advanceSkipNotices?.close();
+}
+
+function closeSkipNotices(includeAdvance = false): void {
+    while (contentState.skipNotices.length > 0) {
+        contentState.skipNotices[contentState.skipNotices.length - 1].close();
+    }
+
+    if (includeAdvance) {
+        closeAdvanceSkipNotice();
+    }
+}
+
+function dontShowNoticeAgain(): void {
+    Config.config.dontShowNotice = true;
+    closeSkipNotices(true);
+}
+
 function createSkipNotice(
     skippingSegments: SponsorTime[],
     autoSkip: boolean,
@@ -33,12 +73,12 @@ function createSkipNotice(
         autoSkip,
         getSkipNoticeContentContainer,
         () => {
-            contentState.advanceSkipNotices?.close();
-            contentState.advanceSkipNotices = null;
+            closeAdvanceSkipNotice();
         },
         unskipTime ?? null,
         startReskip,
-        advanceSkipNoticeShow
+        advanceSkipNoticeShow,
+        removeSkipNotice
     );
     if (Config.config.skipKeybind == null) newSkipNotice.setShowKeybindHint(false);
     contentState.skipNotices.push(newSkipNotice);
@@ -57,13 +97,14 @@ function createAdvanceSkipNotice(
         return;
     }
 
-    contentState.advanceSkipNotices?.close();
+    closeAdvanceSkipNotice();
     contentState.advanceSkipNotices = new advanceSkipNotice(
         skippingSegments,
         getSkipNoticeContentContainer,
         unskipTime ?? null,
         autoSkip,
-        startReskip
+        startReskip,
+        clearAdvanceSkipNotice
     );
     if (Config.config.skipKeybind == null) contentState.advanceSkipNotices.setShowKeybindHint(false);
 
@@ -98,6 +139,9 @@ function applySkipButtonState(enabled: boolean, segment: SponsorTime | null, dur
 
 export function registerSkipUIManager(): void {
     const app = getContentApp();
+
+    app.commands.register("skip/closeNotices", ({ includeAdvance }) => closeSkipNotices(includeAdvance));
+    app.commands.register("skip/dontShowNoticeAgain", () => dontShowNoticeAgain());
 
     app.bus.on(CONTENT_EVENTS.SKIP_NOTICE_REQUESTED, ({ noticeKind, skippingSegments, autoSkip, unskipTime, startReskip }) => {
         if (noticeKind === "advance") {

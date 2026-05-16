@@ -15,6 +15,7 @@ class SkipNotice {
     autoSkip: boolean;
     // Contains functions and variables from the content script needed by the skip notice
     contentContainer: ContentContainer;
+    onClosed: (notice: SkipNotice) => void;
 
     noticeElement: HTMLDivElement;
 
@@ -28,13 +29,15 @@ class SkipNotice {
         componentDidMount: () => void,
         unskipTime: number = null,
         startReskip = false,
-        advanceSkipNoticeShow: boolean
+        advanceSkipNoticeShow: boolean,
+        onClosed: (notice: SkipNotice) => void
     ) {
         this.skipNoticeRef = React.createRef();
 
         this.segments = segments;
         this.autoSkip = autoSkip;
         this.contentContainer = contentContainer;
+        this.onClosed = onClosed;
 
         const referenceNode = utils.findReferenceNode();
 
@@ -85,8 +88,7 @@ class SkipNotice {
 
         this.noticeElement.remove();
 
-        const skipNotices = this.contentContainer().skipNotices;
-        skipNotices.splice(skipNotices.indexOf(this), 1);
+        this.onClosed(this);
     }
 
     toggleSkip(): void {

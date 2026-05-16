@@ -1,5 +1,5 @@
 import { ContentContainer } from "../ContentContainerTypes";
-import { getChannelIDInfo, getVideoID } from "../utils/video";
+import { getChannelIDInfo } from "../utils/video";
 import { getContentApp } from "./app";
 import { contentState } from "./state";
 
@@ -11,17 +11,9 @@ export const getSkipNoticeContentContainer: ContentContainer = () => ({
     },
     unskipSponsorTime: (segment, unskipTime, forceSeek) =>
         getContentApp().commands.execute("skip/unskip", { segment, unskipTime, forceSeek }),
-    sponsorTimes: contentState.sponsorTimes,
     sponsorTimesSubmitting: contentState.sponsorTimesSubmitting,
-    skipNotices: contentState.skipNotices,
-    advanceSkipNotices: contentState.advanceSkipNotices,
-    sponsorVideoID: getVideoID(),
     reskipSponsorTime: (segment, forceSeek) =>
         getContentApp().commands.execute("skip/reskip", { segment, forceSeek }),
-    updatePreviewBar: () => {
-        void getContentApp().commands.execute("ui/updatePreviewBar", undefined);
-    },
-    sponsorSubmissionNotice: getContentApp().ui.getState().submissionNotice,
     resetSponsorSubmissionNotice: (callRef?: boolean) => {
         void getContentApp().commands.execute("segment/resetSubmissionNotice", { callRef });
     },

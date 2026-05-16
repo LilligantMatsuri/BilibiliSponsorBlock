@@ -5,7 +5,6 @@ import NoticeComponent from "../components/NoticeComponent";
 import Utils from "../utils";
 const utils = new Utils();
 
-import { ContentContainer } from "../ContentContainerTypes";
 import NoticeTextSelectionComponent from "../components/NoticeTextSectionComponent";
 import { ButtonListener } from "../components/component-types";
 import { getVideo } from "../utils/video";
@@ -31,19 +30,14 @@ export interface NoticeOptions {
 }
 
 export default class GenericNotice {
-    // Contains functions and variables from the content script needed by the skip notice
-    contentContainer: ContentContainer;
-
     noticeElement: HTMLDivElement;
     noticeRef: React.MutableRefObject<NoticeComponent>;
     idSuffix: string;
     root: Root;
 
-    constructor(contentContainer: ContentContainer, idSuffix: string, options: NoticeOptions) {
+    constructor(idSuffix: string, options: NoticeOptions) {
         this.noticeRef = React.createRef();
         this.idSuffix = idSuffix;
-
-        this.contentContainer = contentContainer;
 
         const referenceNode = options.referenceNode ?? utils.findReferenceNode();
 

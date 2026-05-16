@@ -299,7 +299,7 @@ class SubmissionNoticeComponent extends React.Component<SubmissionNoticeProps, S
             .sort((a, b) => a.segment[0] - b.segment[0]);
         window.navigator.clipboard.writeText(exportTimes(sponsorTimesSubmitting));
 
-        new GenericNotice(null, "exportCopied", {
+        new GenericNotice("exportCopied", {
             title: chrome.i18n.getMessage(`CopiedExclamation`),
             timed: true,
             maxCountdownTime: () => 0.6,
@@ -353,7 +353,7 @@ class SubmissionNoticeComponent extends React.Component<SubmissionNoticeProps, S
                 if (this.guidelinesReminder) {
                     this.guidelinesReminder.update(options);
                 } else {
-                    this.guidelinesReminder = new GenericNotice(null, "GuidelinesReminder", options);
+                    this.guidelinesReminder = new GenericNotice("GuidelinesReminder", options);
                 }
             } else {
                 this.guidelinesReminder?.close();

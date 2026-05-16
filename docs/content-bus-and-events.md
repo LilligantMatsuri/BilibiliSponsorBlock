@@ -89,7 +89,7 @@ content 内部现在分成四层：
 | --- | --- |
 | `segment/*` | 创建、取消、预览、提交、投票、submission notice 控制 |
 | `segments/*` | 拉取正式分段、更新草稿快照、统一修改草稿、导入分段、选中 segment |
-| `skip/*` | skip 调度、skip 执行、preview time、virtual time 相关逻辑 |
+| `skip/*` | skip 调度、skip 执行、preview time、virtual time、skip notice 关闭相关逻辑 |
 | `ui/*` | preview bar、player buttons、pill、active segment 投影 |
 | `popup/*` | 打开和关闭内嵌 popup |
 | `port/*` | port-video 提交、投票、刷新 |
@@ -220,6 +220,7 @@ payload：
 - “草稿变化”被视为稳定业务事实，而不是一串 UI 直调。
 - 发射方不需要知道有哪些 UI 会跟着刷新。
 - 当前草稿数组的 mutation 入口只有 `segmentSubmission` 内部 helper；组件通过 `skipNoticeContentContainer` 的窄 facade 调 command。
+- `skipNoticeContentContainer` 只保留 React notice 组件确实需要的 command facade 和渲染快照，不再暴露 notice registry、UI 实例或未使用的 contentState 快照。
 
 ### 5.5 `segment/updated`
 
@@ -285,14 +286,15 @@ payload：
 
 1. `skipScheduler` 负责做 skip 决策。
 2. 当需要展示 advance notice 或 skip notice 时，发 `skip/noticeRequested`。
-3. `skipUIManager` 收到后创建或更新 `advanceSkipNotice` / `SkipNotice`。
+3. `skipUIManager` 收到后创建或更新 `advanceSkipNotice` / `SkipNotice`，并维护 notice registry 的添加、移除和批量关闭。
 4. 当 skip button 需要启用或禁用时，发 `skip/buttonStateChanged`。
 5. `skipUIManager` 收到后启用或禁用 `SkipButtonControlBar`，并维护 `activeSkipKeybindElement`。
 
 内在逻辑：
 
 - `skipScheduler` 负责决策，不直接 new UI。
-- `skipUIManager` 负责实际 UI 创建和状态投影。
+- `skipUIManager` 负责实际 UI 创建、notice 生命周期和状态投影。
+- `skip/closeNotices` 是关闭 skip notice 的 command 入口。视频 reset 使用 `includeAdvance: true` 同时关闭 advance notice；关闭 notice 快捷键使用 `includeAdvance: false`，保持只关闭普通 skip notice 的行为。
 
 ## 6. 仍适合继续观察的候选
 

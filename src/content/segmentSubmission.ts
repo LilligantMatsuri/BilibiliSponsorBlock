@@ -302,7 +302,6 @@ export function registerSegmentSubmission(): void {
     app.commands.register("segment/isCreationInProgress", () => isSegmentCreationInProgress());
     app.commands.register("segment/getRealCurrentTime", () => getRealCurrentTime());
     app.commands.register("segment/resetSubmissionNotice", ({ callRef }) => resetSponsorSubmissionNotice(callRef));
-    app.commands.register("skip/dontShowNoticeAgain", () => dontShowNoticeAgain());
     app.commands.register("segment/vote", ({ type, UUID, category, skipNotice }) => vote(type, UUID, category, skipNotice));
     app.commands.register("segment/voteAsync", ({ type, UUID, category }) => voteAsync(type, UUID, category));
     app.commands.register("segments/lookup", ({ keepOldSubmissions, ignoreServerCache, forceUpdatePreviewBar }) =>
@@ -793,7 +792,7 @@ export async function vote(
                         response.statusCode === 403 &&
                         response.responseText.startsWith("Vote rejected due to a tip from a moderator.")
                     ) {
-                        openWarningDialog(getSkipNoticeContentContainer);
+                        openWarningDialog();
                     } else {
                         skipNotice.setNoticeInfoMessage.bind(skipNotice)(
                             getErrorMessage(response.statusCode, response.responseText)
@@ -868,21 +867,6 @@ export async function voteAsync(type: number, UUID: SegmentUUID, category?: Cate
             }
         );
     });
-}
-
-export function closeAllSkipNotices(): void {
-    while (contentState.skipNotices.length > 0) {
-        contentState.skipNotices[contentState.skipNotices.length - 1].close();
-    }
-
-    contentState.advanceSkipNotices?.close();
-    contentState.advanceSkipNotices = null;
-    contentState.activeSkipKeybindElement = null;
-}
-
-export function dontShowNoticeAgain(): void {
-    Config.config.dontShowNotice = true;
-    closeAllSkipNotices();
 }
 
 /**
@@ -1040,7 +1024,7 @@ export async function sendSubmitMessage(): Promise<boolean> {
             response.status === 403 &&
             response.responseText.startsWith("Submission rejected due to a tip from a moderator.")
         ) {
-            openWarningDialog(getSkipNoticeContentContainer);
+            openWarningDialog();
         } else {
             showMessage(getErrorMessage(response.status, response.responseText), "warning");
         }

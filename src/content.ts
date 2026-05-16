@@ -192,14 +192,7 @@ function resetValues() {
     getSkipButtonControlBar()?.disable();
     getCategoryPill()?.resetSegment();
 
-    for (let i = 0; i < contentState.skipNotices.length; i++) {
-        contentState.skipNotices.pop()?.close();
-    }
-
-    if (contentState.advanceSkipNotices) {
-        contentState.advanceSkipNotices.close();
-        contentState.advanceSkipNotices = null;
-    }
+    void app.commands.execute("skip/closeNotices", { includeAdvance: true });
 
     contentState.activeSkipKeybindElement = null;
 

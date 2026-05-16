@@ -82,9 +82,7 @@ function hotkeyListener(e: KeyboardEvent): void {
 
         return;
     } else if (keybindEquals(key, closeSkipNoticeKey)) {
-        for (let i = 0; i < contentState.skipNotices.length; i++) {
-            contentState.skipNotices.pop().close();
-        }
+        void getContentApp().commands.execute("skip/closeNotices", { includeAdvance: false });
 
         return;
     } else if (keybindEquals(key, startSponsorKey)) {
